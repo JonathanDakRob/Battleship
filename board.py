@@ -5,6 +5,8 @@
 import pygame
 import sys
 
+import backend
+
 # ------------------ CONFIG ------------------
 GRID_SIZE = 10
 CELL_SIZE = 40
@@ -37,6 +39,9 @@ class Cell:
     def handle_click(self):
         
         #Data to be sent to the backend
+        if self.grid_id == 0:
+            backend.send_bomb(self.row, self.col)
+
 
         print(f"Clicked Grid {self.grid_id}, Row {self.row}, Col {self.col}")
         return (self.grid_id, self.row, self.col)
