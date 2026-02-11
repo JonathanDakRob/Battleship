@@ -10,7 +10,14 @@ BOARD_SIZE = 10
 
 # Connection to server
 sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-sock.connect((SERVER_IP, PORT))
+while True:
+    try:
+        sock.connect((SERVER_IP, PORT))
+        break
+    except ConnectionRefusedError:
+        print("Waiting for server...")
+        import time
+        time.sleep(1)
 
 print("Connected to server")
 
@@ -132,3 +139,5 @@ def all_ships_sunk():
         if not check_ship_sunk(i):
             return False
     return True
+
+
