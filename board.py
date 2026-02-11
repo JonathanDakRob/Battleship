@@ -8,11 +8,14 @@ import sys
 import backend
 
 # ------------------ CONFIG ------------------
+import os
+os.environ['SDL_VIDEO_CENTERED'] = '1' 
+
 GRID_SIZE = 10
-CELL_SIZE = 40
-GRID_PADDING = 40
-WINDOW_WIDTH = GRID_SIZE * CELL_SIZE + 2 * GRID_PADDING
-WINDOW_HEIGHT = (GRID_SIZE * CELL_SIZE * 2) + 3 * GRID_PADDING
+CELL_SIZE = 30       # Shrinks the squares so the window isn't too tall
+GRID_PADDING = 30    
+WINDOW_WIDTH = GRID_SIZE * CELL_SIZE + 2 * GRID_PADDING + 150 
+WINDOW_HEIGHT = (GRID_SIZE * CELL_SIZE * 2) + 4 * GRID_PADDING 
 
 BG_COLOR = (30, 30, 30)
 GRID_COLOR = (200, 200, 200)
@@ -24,7 +27,9 @@ SHIP_BLOCK_SIZE = CELL_SIZE
 
 GAME_STATE = "SELECT_SHIPS"
 
+
 # ------------------ INIT ------------------
+
 pygame.init()
 screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
 pygame.display.set_caption("Two 10x10 Grids")
@@ -58,28 +63,29 @@ class Ship:
         self.length = length
         self.x = x
         self.y = y
+        self.orientation= "V" # Default to Vertical
         self.block_size = CELL_SIZE
         self.dragging = False
         self.offset_x = 0
         self.offset_y = 0
+        self.placed= False # Visual feedback: turns green when successfully placed
 
     def get_rects(self):
         rects = []
         for i in range(self.length):
-            rects.append(
-                pygame.Rect(
-                    self.x,
-                    self.y + i * self.block_size,
-                    self.block_size,
-                    self.block_size
-                )
-            )
+            # If Horizontal, move X; if Vertical, move Y
+            curr_x = self.x + (i * CELL_SIZE if self.orientation == "H" else 0)
+            curr_y = self.y + (i * CELL_SIZE if self.orientation == "V" else 0)
+            rects.append(pygame.Rect(curr_x, curr_y, CELL_SIZE, CELL_SIZE))
         return rects
+            
 
     def draw(self, surface):
         for rect in self.get_rects():
-            pygame.draw.rect(surface, SHIP_COLOR, rect)
+            color = (0, 255, 0) if self.placed else SHIP_COLOR
+            pygame.draw.rect(surface, color, rect)
             pygame.draw.rect(surface, (50, 50, 50), rect, 2)
+            
 
     def handle_event(self, event):
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
@@ -91,7 +97,24 @@ class Ship:
                     break
 
         elif event.type == pygame.MOUSEBUTTONUP and event.button == 1:
-            self.dragging = False
+            if self.dragging:
+                self.dragging = False
+                
+                col = round((self.x - GRID_PADDING) / CELL_SIZE)
+                row = round((self.y - GRID_PADDING) / CELL_SIZE)
+
+                if backend.place_ship(row, col, self.length, self.orientation):
+                    
+                    self.x = GRID_PADDING + col * CELL_SIZE
+                    self.y = GRID_PADDING + row * CELL_SIZE
+                    self.placed = True
+                else:
+                    self.placed = False 
+
+        elif event.type == pygame.KEYDOWN and self.dragging:
+            # Press 'R' while dragging to rotate
+            if event.key == pygame.K_r:
+                self.orientation = "H" if self.orientation == "V" else "V"
 
         elif event.type == pygame.MOUSEMOTION:
             if self.dragging:
@@ -112,7 +135,7 @@ def draw_ship_selection():
     screen.blit(title_text, (WINDOW_WIDTH // 2 - title_text.get_width() // 2, WINDOW_HEIGHT // 3))
     screen.blit(instruction_text, (WINDOW_WIDTH // 2 - instruction_text.get_width() // 2, WINDOW_HEIGHT // 2))
 
-    pygame.display.flip()
+    #pygame.display.flip()
 
 # ------------------ SHIP PLACEMENT ------------------
 ships = []
@@ -148,7 +171,14 @@ def draw_ship_placement():
     for ship in ships:
         ship.draw(screen)
 
-    pygame.display.flip()
+    button_rect = pygame.Rect(WINDOW_WIDTH // 2 - 70, WINDOW_HEIGHT - 60, 140, 40)
+    pygame.draw.rect(screen, (50, 200, 50), button_rect)
+    
+    font = pygame.font.SysFont(None, 24)
+    text = font.render("LOCK SHIPS", True, (255, 255, 255))
+    screen.blit(text, (button_rect.centerx - text.get_width() // 2, button_rect.centery - text.get_height() // 2))
+
+    #pygame.display.flip()
 
 # ------------------ GRID CREATION ------------------
 def create_grid(grid_id, start_x, start_y):
@@ -171,6 +201,22 @@ top_grid = create_grid(0, GRID_PADDING, top_grid_y)
 bottom_grid = create_grid(1, GRID_PADDING, bottom_grid_y)
 
 all_cells = top_grid + bottom_grid
+
+def draw_lock_button(mouse_pos):
+    # Place button at the bottom center
+    button_rect = pygame.Rect(WINDOW_WIDTH // 2 - 70, WINDOW_HEIGHT - 60, 140, 40)
+    if button_rect.collidepoint(mouse_pos):
+        color = (70, 230, 70)  
+       
+        pygame.draw.rect(screen, (255, 255, 255), button_rect.inflate(4, 4), 2)
+    else:
+        color = (50, 200, 50)  
+    pygame.draw.rect(screen, (50, 200, 50), button_rect)
+    
+    font = pygame.font.SysFont(None, 24)
+    text = font.render("LOCK SHIPS", True, (255, 255, 255))
+    screen.blit(text, (button_rect.centerx - text.get_width() // 2, button_rect.centery - text.get_height() // 2))
+    return button_rect
 
 
 # ------------------ MAIN LOOP ------------------
@@ -195,15 +241,20 @@ while running:
                     ship_count = int(event.unicode)
                     print(f"Selected {ship_count} ships")
 
-                    # You can send this to backend if needed
-                    # backend.send_ship_count(ship_count)
                     create_ships(ship_count)
 
                     GAME_STATE = "PLACE_SHIPS"
         # ------------------ SHIP PLACING STATE ------------------
         elif GAME_STATE == "PLACE_SHIPS":
             for ship in ships:
-                ship.handle_event(event)            
+                ship.handle_event(event)    
+
+            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                lock_rect = pygame.Rect(WINDOW_WIDTH // 2 - 70, WINDOW_HEIGHT - 60, 140, 40)
+                if lock_rect.collidepoint(event.pos):
+                    print("Ships Locked! Sending to server...")
+                    backend.submit_placement() # Calls your existing backend function
+                    GAME_STATE = "RUNNING_GAME" # Moves to the shooting phase        
                 
 
         # ------------------ GAME STATE ------------------
@@ -215,18 +266,23 @@ while running:
 
     # ------------------ DRAWING ------------------
 
+    
+
     if GAME_STATE == "SELECT_SHIPS":
         draw_ship_selection()
+       
+
     
     elif GAME_STATE == "PLACE_SHIPS":
         draw_ship_placement()
+        draw_lock_button(mouse_pos)
 
     elif GAME_STATE == "RUNNING_GAME":
         screen.fill(BG_COLOR)
         for cell in all_cells:
             cell.draw(screen, mouse_pos)
 
-        pygame.display.flip()
+    pygame.display.flip()
 
     clock.tick(60)
 
