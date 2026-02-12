@@ -69,6 +69,8 @@ class Ship:
         self.offset_x = 0
         self.offset_y = 0
         self.placed= False # Visual feedback: turns green when successfully placed
+        self.grid_row = None
+        self.grid_col = None
 
     def get_rects(self):
         rects = []
@@ -103,8 +105,10 @@ class Ship:
                 col = round((self.x - GRID_PADDING) / CELL_SIZE)
                 row = round((self.y - GRID_PADDING) / CELL_SIZE)
 
-                if backend.place_ship(row, col, self.length, self.orientation):
-                    
+                self.grid_col = col
+                self.grid_row = row
+
+                if backend.can_place_ship(backend.compute_ship_cells(row, col, self.length, self.orientation)):
                     self.x = GRID_PADDING + col * CELL_SIZE
                     self.y = GRID_PADDING + row * CELL_SIZE
                     self.placed = True
@@ -136,6 +140,23 @@ def draw_ship_selection():
     screen.blit(instruction_text, (WINDOW_WIDTH // 2 - instruction_text.get_width() // 2, WINDOW_HEIGHT // 2))
 
     #pygame.display.flip()
+
+def draw_backend_ships():
+    """
+    Draw ships stored in backend.ships onto the bottom grid.
+    Assumes backend.ships is a list of lists of (row, col) tuples.
+    """
+
+    for ship in backend.ships:
+        for (row, col) in ship:
+
+            x = GRID_PADDING + col * CELL_SIZE
+            y = bottom_grid_y + row * CELL_SIZE
+
+            rect = pygame.Rect(x, y, CELL_SIZE, CELL_SIZE)
+
+            pygame.draw.rect(screen, (0, 200, 0), rect)
+            pygame.draw.rect(screen, (50, 50, 50), rect, 2)
 
 # ------------------ SHIP PLACEMENT ------------------
 ships = []
@@ -202,6 +223,7 @@ bottom_grid = create_grid(1, GRID_PADDING, bottom_grid_y)
 
 all_cells = top_grid + bottom_grid
 
+# ------------------ DRAW LOCK BUTTON ------------------
 def draw_lock_button(mouse_pos):
     # Place button at the bottom center
     button_rect = pygame.Rect(WINDOW_WIDTH // 2 - 70, WINDOW_HEIGHT - 60, 140, 40)
@@ -244,6 +266,7 @@ while running:
                     create_ships(ship_count)
 
                     GAME_STATE = "PLACE_SHIPS"
+
         # ------------------ SHIP PLACING STATE ------------------
         elif GAME_STATE == "PLACE_SHIPS":
             for ship in ships:
@@ -253,11 +276,28 @@ while running:
                 lock_rect = pygame.Rect(WINDOW_WIDTH // 2 - 70, WINDOW_HEIGHT - 60, 140, 40)
                 if lock_rect.collidepoint(event.pos):
                     print("Ships Locked! Sending to server...")
+                    if lock_rect.collidepoint(event.pos):
+
+                        all_valid = True
+
+                        for ship in ships:
+                            if not ship.placed:
+                                all_valid = False
+                                break
+
+                        if all_valid:
+                            for ship in ships:
+                                backend.place_ship(
+                                    ship.grid_row,
+                                    ship.grid_col,
+                                    ship.length,
+                                    ship.orientation
+                                )
+
                     backend.submit_placement() # Calls your existing backend function
                     GAME_STATE = "RUNNING_GAME" # Moves to the shooting phase        
-                
 
-        # ------------------ GAME STATE ------------------
+        # ------------------ RUNNING GAME STATE ------------------
         elif GAME_STATE == "RUNNING_GAME":
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 for cell in all_cells:
@@ -265,13 +305,8 @@ while running:
                         cell.handle_click()
 
     # ------------------ DRAWING ------------------
-
-    
-
     if GAME_STATE == "SELECT_SHIPS":
         draw_ship_selection()
-       
-
     
     elif GAME_STATE == "PLACE_SHIPS":
         draw_ship_placement()
@@ -281,6 +316,9 @@ while running:
         screen.fill(BG_COLOR)
         for cell in all_cells:
             cell.draw(screen, mouse_pos)
+        
+        # Draw backend ships on bottom grid
+        draw_backend_ships()
 
     pygame.display.flip()
 
