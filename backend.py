@@ -3,6 +3,7 @@
 
 import socket
 import json
+import threading
 
 SERVER_IP = "127.0.0.1"
 PORT = 5000
@@ -32,13 +33,19 @@ grid = [["." for _ in range(BOARD_SIZE)] for _ in range(BOARD_SIZE)]
 
 # Ships stored as arrays of coordinate tuples
 # For example: [[(0,0)], [(2,3),(2,4)], [(5,1),(6,1),(7,1)]]
+ship_count = 0
 ships = []
+
+# Player ID
+player_id = None
+
+# Game state
+GAME_STATE = "SELECT_SHIPS"
 
 # Track shots received
 shots_received = []
 
 # Utility Functions
-
 def in_bounds(row, col):
     return 0 <= row < BOARD_SIZE and 0 <= col < BOARD_SIZE
 
@@ -60,8 +67,62 @@ def can_place_ship(cells):
             return False
     return True
 
-# Ship Placement
+# Server Communication
+# handle_server_message --> This function handles json messages passed to it by the servergit 
+def handle_server_message(message):
+    global player_id
+    global GAME_STATE
+    global ship_count
 
+    if message["type"] == "player_id":
+        player_id = message["player"]
+        print(f"You are Player {player_id}")
+
+    elif message["type"] == "bomb":
+        row = message["row"]
+        col = message["col"]
+        receive_shot(row, col)
+
+    elif message["type"] == "game_state":
+        GAME_STATE = message["state"]
+
+    elif message["type"] == "ship_count":
+        ship_count = message["count"]
+
+def listen_to_server():
+    while True:
+        try:
+            data = sock.recv(4096).decode()
+            if data:
+                message = json.loads(data)
+                handle_server_message(message)
+        except:
+            break
+
+threading.Thread(target=listen_to_server, daemon=True).start() # Thread that constantly listens for messages
+
+def update_game_state(new_state):
+    global GAME_STATE
+    GAME_STATE = new_state
+
+    message = {
+        "type": "game_state",
+        "state": GAME_STATE,
+        "player": player_id # Sender
+    }
+
+    sock.send(json.dumps(message).encode())
+
+def update_ship_count(ship_count):
+    
+    message = {
+        "type": "ship_count",
+        "count": ship_count
+    }
+
+    sock.send(json.dumps(message).encode())
+
+# Ship Placement
 def place_ship(row, col, size, orientation):
     # Place a ship locally and store coordinates in ships array.
     cells = compute_ship_cells(row, col, size, orientation)

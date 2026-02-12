@@ -25,8 +25,6 @@ SHIP_COLOR = (180, 180, 180)
 SHIP_PADDING = 20
 SHIP_BLOCK_SIZE = CELL_SIZE
 
-GAME_STATE = "SELECT_SHIPS"
-
 
 # ------------------ INIT ------------------
 
@@ -243,6 +241,7 @@ def draw_lock_button(mouse_pos):
 
 # ------------------ MAIN LOOP ------------------
 running = True
+
 while running:
     mouse_pos = pygame.mouse.get_pos()
 
@@ -251,26 +250,34 @@ while running:
             running = False
 
         # ------------------ SHIP SELECTION STATE ------------------
-        if GAME_STATE == "SELECT_SHIPS":
-            if event.type == pygame.KEYDOWN:
-                if event.key in [
-                    pygame.K_1,
-                    pygame.K_2,
-                    pygame.K_3,
-                    pygame.K_4,
-                    pygame.K_5,
-                ]:
-                    ship_count = int(event.unicode)
-                    print(f"Selected {ship_count} ships")
+        if backend.GAME_STATE == "SELECT_SHIPS":
+            if backend.player_id == 0:
+                if event.type == pygame.KEYDOWN:
+                    if event.key in [
+                        pygame.K_1,
+                        pygame.K_2,
+                        pygame.K_3,
+                        pygame.K_4,
+                        pygame.K_5,
+                    ]:
+                        ship_count = int(event.unicode)
+                        print(f"Selected {ship_count} ships")
 
+                        create_ships(ship_count)
+                        backend.update_ship_count(ship_count)
+                        backend.update_game_state("PLACE_SHIPS")
+            elif backend.player_id == 1:
+                print("Waiting for player 0 to choose ship count")
+                while backend.GAME_STATE == "SELECT_SHIPS":
+                    clock.tick(10)
+                    ship_count = backend.ship_count
+                    print(f"Player 0 selected {ship_count} ships")
                     create_ships(ship_count)
 
-                    GAME_STATE = "PLACE_SHIPS"
-
         # ------------------ SHIP PLACING STATE ------------------
-        elif GAME_STATE == "PLACE_SHIPS":
+        elif backend.GAME_STATE == "PLACE_SHIPS":
             for ship in ships:
-                ship.handle_event(event)    
+                ship.handle_event(event)
 
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 lock_rect = pygame.Rect(WINDOW_WIDTH // 2 - 70, WINDOW_HEIGHT - 60, 140, 40)
@@ -295,24 +302,24 @@ while running:
                                 )
 
                     backend.submit_placement() # Calls your existing backend function
-                    GAME_STATE = "RUNNING_GAME" # Moves to the shooting phase        
+                    backend.GAME_STATE = "RUNNING_GAME" # Moves to the shooting phase        
 
         # ------------------ RUNNING GAME STATE ------------------
-        elif GAME_STATE == "RUNNING_GAME":
+        elif backend.GAME_STATE == "RUNNING_GAME":
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 for cell in all_cells:
                     if cell.rect.collidepoint(mouse_pos):
                         cell.handle_click()
 
     # ------------------ DRAWING ------------------
-    if GAME_STATE == "SELECT_SHIPS":
+    if backend.GAME_STATE == "SELECT_SHIPS":
         draw_ship_selection()
     
-    elif GAME_STATE == "PLACE_SHIPS":
+    elif backend.GAME_STATE == "PLACE_SHIPS":
         draw_ship_placement()
         draw_lock_button(mouse_pos)
 
-    elif GAME_STATE == "RUNNING_GAME":
+    elif backend.GAME_STATE == "RUNNING_GAME":
         screen.fill(BG_COLOR)
         for cell in all_cells:
             cell.draw(screen, mouse_pos)
