@@ -1,6 +1,6 @@
 #This file is for creating the interactive battleship board
 
-#This file will handle the backend of our battleship game
+#This file will handle the frontend of our battleship game
 
 import pygame
 import sys
@@ -143,6 +143,8 @@ def draw_backend_ships():
     """
     Draw ships stored in backend.ships onto the bottom grid.
     Assumes backend.ships is a list of lists of (row, col) tuples.
+
+    Meant for the RUNNING_GAME state
     """
 
     for ship in backend.ships:
@@ -170,6 +172,27 @@ def create_ships(num_ships):
         ships.append(ship)
 
         ships_start_y += (ship_length * CELL_SIZE) + SHIP_PADDING
+
+def draw_waiting_for_player(number, message):
+    screen.fill(BG_COLOR)
+
+    font = pygame.font.SysFont(None, 48)
+    small_font = pygame.font.SysFont(None, 28)
+
+    title = font.render(f"Waiting for Player {number}...", True, (255, 255, 255))
+    subtitle = small_font.render(message, True, (180, 180, 180))
+
+    screen.blit(
+        title,
+        (WINDOW_WIDTH // 2 - title.get_width() // 2,
+         WINDOW_HEIGHT // 2 - title.get_height())
+    )
+
+    screen.blit(
+        subtitle,
+        (WINDOW_WIDTH // 2 - subtitle.get_width() // 2,
+         WINDOW_HEIGHT // 2 + 10)
+    )
 
 def draw_ship_placement():
     screen.fill(BG_COLOR)
@@ -242,6 +265,10 @@ def draw_lock_button(mouse_pos):
 # ------------------ MAIN LOOP ------------------
 running = True
 
+ships_selected = False # Used to move on from ship selection stage
+
+print(f"You Are Player {backend.player_id}")
+
 while running:
     mouse_pos = pygame.mouse.get_pos()
 
@@ -266,13 +293,15 @@ while running:
                         create_ships(ship_count)
                         backend.update_ship_count(ship_count)
                         backend.update_game_state("PLACE_SHIPS")
-            elif backend.player_id == 1:
-                print("Waiting for player 0 to choose ship count")
-                while backend.GAME_STATE == "SELECT_SHIPS":
-                    clock.tick(10)
-                    ship_count = backend.ship_count
+            if backend.player_id == 1:
+                ship_count = backend.ship_count
+                if ship_count > 0 and ships_selected == False:
+                    ships_selected = True
                     print(f"Player 0 selected {ship_count} ships")
+                    print(f"SHIP COUNT: {ship_count}")
                     create_ships(ship_count)
+
+                    backend.update_game_state("PLACE_SHIPS")
 
         # ------------------ SHIP PLACING STATE ------------------
         elif backend.GAME_STATE == "PLACE_SHIPS":
@@ -313,7 +342,10 @@ while running:
 
     # ------------------ DRAWING ------------------
     if backend.GAME_STATE == "SELECT_SHIPS":
-        draw_ship_selection()
+        if backend.player_id == 0:
+            draw_ship_selection()
+        if backend.player_id == 1:
+            draw_waiting_for_player(0, "Player 0 will select 1-5 ships")
     
     elif backend.GAME_STATE == "PLACE_SHIPS":
         draw_ship_placement()

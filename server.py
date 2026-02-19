@@ -46,7 +46,9 @@ def handle_client(player_index):
             print(f"Received from Player {player_index}: {message}")
 
             # Forward message to opponent
+            print(f"Sends {message} to other player")
             opponent.send(json.dumps(message).encode())
+
 
         except:
             print("SERVER ERROR: MESSAGE ERROR 2")

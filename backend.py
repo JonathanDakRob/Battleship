@@ -32,9 +32,9 @@ print("Connected to server")
 grid = [["." for _ in range(BOARD_SIZE)] for _ in range(BOARD_SIZE)]
 target_grid = [["." for _ in range(BOARD_SIZE)] for _ in range(BOARD_SIZE)]
 
+ship_count = 0
 # Ships stored as arrays of coordinate tuples
 # For example: [[(0,0)], [(2,3),(2,4)], [(5,1),(6,1),(7,1)]]
-ship_count = 0
 ships = []
 
 # Identity and match state
@@ -150,6 +150,7 @@ def handle_server_message(message):
 
     elif message["type"] == "ship_count":
         ship_count = message["count"]
+        GAME_STATE = "PLACE_SHIPS"
 
 def listen_to_server():
     while True:
@@ -173,7 +174,7 @@ def update_game_state(new_state):
         "player": player_id # Sender
     }
 
-    sock.send(json.dumps(message).encode())
+    # sock.send(json.dumps(message).encode())
 
 def update_ship_count(ship_count):
     
@@ -284,19 +285,6 @@ def handle_server_message(message):
         last_message = str(message.get("message", ""))
         print(last_message)
 """
-def listen_to_server():
-    while True:
-        try:
-            lines = _recv_lines()
-            for line in lines:
-                if not line.strip():
-                    continue
-                message = json.loads(line)
-                handle_server_message(message)
-        except:
-            break
-
-threading.Thread(target=listen_to_server, daemon=True).start()
 
 # Config / Ship Count (Player 0 chooses)
 def set_ship_count(n):
