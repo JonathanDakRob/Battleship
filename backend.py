@@ -25,7 +25,8 @@ print("Connected to server")
 
 # Networking Helpers
 def _send(msg):
-    sock.sendall((json.dumps(msg) + "\n").encode("utf-8"))
+    #sock.sendall((json.dumps(msg) + "\n").encode("utf-8"))
+    sock.send(json.dumps(msg).encode())
 
 def _recv_lines():
     try:
@@ -72,6 +73,8 @@ your_turn = False
 battle_started = False
 game_over = False
 last_message = ""
+ships_locked = False
+all_ships_locked = False
 
 # Game state
 GAME_STATE = "SELECT_SHIPS"
@@ -138,10 +141,10 @@ def update_game_state(new_state):
     message = {
         "type": "game_state",
         "state": GAME_STATE,
-        "player": player_id # Sender
+        "sender": player_id # Sender
     }
 
-    # sock.send(json.dumps(message).encode())
+    sock.send(json.dumps(message).encode())
 
 def update_ship_count(ship_count):
     
@@ -202,6 +205,7 @@ def place_ship(row, col, size, orientation):
 
 def submit_placement():
     # Send ship coordinate arrays to server
+    global ships_locked
     payload = []
 
     for ship in ships:
@@ -213,7 +217,8 @@ def submit_placement():
         "type": "place_ships",
         "ships": payload
     }
-
+    
+    ships_locked = True
     print("Submitting ship placement to server")
     _send(msg)
 
@@ -318,9 +323,7 @@ def reset_game():
 
 # handle_server_message --> This function handles json messages passed to it by the servergit 
 def handle_server_message(message):
-    global player_id
-    global GAME_STATE
-    global ship_count
+    global player_id, GAME_STATE, ship_count, ships_locked, all_ships_locked
 
     if message["type"] == "player_id":
         player_id = message["player"]
@@ -336,6 +339,9 @@ def handle_server_message(message):
 
     elif message["type"] == "set_ship_count":
         ship_count = message["count"]
+    
+    elif message["type"] == "all_ships_locked":
+        all_ships_locked = True
     
     else:
         print(f"Unknown Message: {message}")

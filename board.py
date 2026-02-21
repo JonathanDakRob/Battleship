@@ -267,6 +267,11 @@ def draw_lock_button(mouse_pos):
 # Please use these player_id variables when printing sending/printing things like: "Waiting For Player X"
 player1_id = 1 
 player2_id = 2
+opponent_id = -1
+if backend.player_id == 1:
+    opponent_id = 2
+else:
+    opponent_id = 1
 
 running = True
 ships_selected = False # Used to move on from ship selection stage
@@ -337,16 +342,24 @@ while running:
                                 )
 
                     backend.submit_placement() # Calls the  backend function
-                    #TODO: PLAYER NEED TO WAIT FOR THE OTHER PLAYER TO FINISH PLACING SHIPS BEFORE MOVING TO RUNNING_GAME STATE
-                    
-                    backend.GAME_STATE = "RUNNING_GAME" # Moves to the shooting phase        
+                    backend.update_game_state("WAITING_FOR_OPPONENT")
+
+        # ------------------ WAITING FOR OTHER PLAYER STATE ------------------
+        elif backend.GAME_STATE == "WAITING_FOR_OPPONENT":
+            print(f"Player {backend.player_id} Locked: {backend.ships_locked}")
+            print(f"All Ships Locked: {backend.all_ships_locked}")
+            if backend.all_ships_locked:
+                backend.update_game_state("RUNNING_GAME")
 
         # ------------------ RUNNING GAME STATE ------------------
         elif backend.GAME_STATE == "RUNNING_GAME":
+            #TODO: Create Gameplay Loop
+            
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 for cell in all_cells:
                     if cell.rect.collidepoint(mouse_pos):
                         cell.handle_click()
+
 
     # ------------------ DRAWING ------------------
     if backend.GAME_STATE == "SELECT_SHIPS":
@@ -358,6 +371,9 @@ while running:
     elif backend.GAME_STATE == "PLACE_SHIPS":
         draw_ship_placement()
         draw_lock_button(mouse_pos)
+    
+    elif backend.GAME_STATE == "WAITING_FOR_OPPONENT":
+        draw_waiting_for_player(opponent_id, f"Player {opponent_id} is still placing their ships")
 
     elif backend.GAME_STATE == "RUNNING_GAME":
         screen.fill(BG_COLOR)
