@@ -162,6 +162,7 @@ def draw_backend_ships():
 ships = []
 
 def create_ships(num_ships):
+    global ships
     ships.clear()
 
     ships_start_x = GRID_PADDING + GRID_SIZE * CELL_SIZE + SHIP_PADDING
@@ -263,8 +264,11 @@ def draw_lock_button(mouse_pos):
 
 
 # ------------------ MAIN LOOP ------------------
-running = True
+# Please use these player_id variables when printing sending/printing things like: "Waiting For Player X"
+player1_id = 1 
+player2_id = 2
 
+running = True
 ships_selected = False # Used to move on from ship selection stage
 
 print(f"You Are Player {backend.player_id}")
@@ -272,13 +276,15 @@ print(f"You Are Player {backend.player_id}")
 while running:
     mouse_pos = pygame.mouse.get_pos()
 
+    #print(f"GAME STATE: {backend.GAME_STATE}")
+
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             running = False
 
         # ------------------ SHIP SELECTION STATE ------------------
         if backend.GAME_STATE == "SELECT_SHIPS":
-            if backend.player_id == 0:
+            if backend.player_id == player1_id:
                 if event.type == pygame.KEYDOWN:
                     if event.key in [
                         pygame.K_1,
@@ -293,11 +299,11 @@ while running:
                         create_ships(ship_count)
                         backend.update_ship_count(ship_count)
                         backend.update_game_state("PLACE_SHIPS")
-            if backend.player_id == 1:
+            if backend.player_id == player2_id:
                 ship_count = backend.ship_count
                 if ship_count > 0 and ships_selected == False:
                     ships_selected = True
-                    print(f"Player 0 selected {ship_count} ships")
+                    print(f"Player {player1_id} selected {ship_count} ships")
                     print(f"SHIP COUNT: {ship_count}")
                     create_ships(ship_count)
 
@@ -330,7 +336,9 @@ while running:
                                     ship.orientation
                                 )
 
-                    backend.submit_placement() # Calls your existing backend function
+                    backend.submit_placement() # Calls the  backend function
+                    #TODO: PLAYER NEED TO WAIT FOR THE OTHER PLAYER TO FINISH PLACING SHIPS BEFORE MOVING TO RUNNING_GAME STATE
+                    
                     backend.GAME_STATE = "RUNNING_GAME" # Moves to the shooting phase        
 
         # ------------------ RUNNING GAME STATE ------------------
@@ -342,10 +350,10 @@ while running:
 
     # ------------------ DRAWING ------------------
     if backend.GAME_STATE == "SELECT_SHIPS":
-        if backend.player_id == 0:
+        if backend.player_id == player1_id:
             draw_ship_selection()
-        if backend.player_id == 1:
-            draw_waiting_for_player(0, "Player 0 will select 1-5 ships")
+        if backend.player_id == player2_id:
+            draw_waiting_for_player(player1_id, f"Player {player1_id} will select 1-5 ships")
     
     elif backend.GAME_STATE == "PLACE_SHIPS":
         draw_ship_placement()

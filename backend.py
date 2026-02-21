@@ -9,6 +9,7 @@ SERVER_IP = "127.0.0.1"
 PORT = 5000
 BOARD_SIZE = 10
 
+############################################################################# Server Communication #############################################################################
 # Connection to server
 sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 while True:
@@ -22,6 +23,33 @@ while True:
 
 print("Connected to server")
 
+# Networking Helpers
+def _send(msg):
+    sock.sendall((json.dumps(msg) + "\n").encode("utf-8"))
+
+def _recv_lines():
+    try:
+        chunk = sock.recv(4096)
+    except OSError:
+        return []
+    if not chunk:
+        return []
+
+    _recv_buffer.extend(chunk)
+
+    lines = []
+
+    while True:
+        idx = _recv_buffer.find(b"\n")
+        if idx == -1:
+            break
+        line = _recv_buffer[:idx].decode("utf-8", errors="replace")
+        del _recv_buffer[:idx + 1]
+        lines.append(line)
+    return lines
+
+
+############################################################################# Memory and Functions #############################################################################
 # Local Game State
 
 # 10x10 grid representation
@@ -103,67 +131,6 @@ def can_send_bomb(row, col):
         return False
     return True
 
-# Networking Helpers
-
-def _send(msg):
-    sock.sendall((json.dumps(msg) + "\n").encode("utf-8"))
-
-def _recv_lines():
-    try:
-        chunk = sock.recv(4096)
-    except OSError:
-        return []
-    if not chunk:
-        return []
-
-    _recv_buffer.extend(chunk)
-
-    lines = []
-
-    while True:
-        idx = _recv_buffer.find(b"\n")
-        if idx == -1:
-            break
-        line = _recv_buffer[:idx].decode("utf-8", errors="replace")
-        del _recv_buffer[:idx + 1]
-        lines.append(line)
-    return lines
-
-# Server Communication
-# handle_server_message --> This function handles json messages passed to it by the servergit 
-def handle_server_message(message):
-    global player_id
-    global GAME_STATE
-    global ship_count
-
-    if message["type"] == "player_id":
-        player_id = message["player"]
-        print(f"You are Player {player_id}")
-
-    elif message["type"] == "bomb":
-        row = message["row"]
-        col = message["col"]
-        receive_shot(row, col)
-
-    elif message["type"] == "game_state":
-        GAME_STATE = message["state"]
-
-    elif message["type"] == "ship_count":
-        ship_count = message["count"]
-        GAME_STATE = "PLACE_SHIPS"
-
-def listen_to_server():
-    while True:
-        try:
-            data = sock.recv(4096).decode()
-            if data:
-                message = json.loads(data)
-                handle_server_message(message)
-        except:
-            break
-
-threading.Thread(target=listen_to_server, daemon=True).start() # Thread that constantly listens for messages
-
 def update_game_state(new_state):
     global GAME_STATE
     GAME_STATE = new_state
@@ -184,107 +151,6 @@ def update_ship_count(ship_count):
     }
 
     sock.send(json.dumps(message).encode())
-
-# Server Message Handling V2? Potential whole addition to server message handling; needs testing.
-"""
-def handle_server_message(message):
-    global player_id, ship_count, stage, your_turn, battle_started, game_over, last_message
-
-    mtype = message.get("type")
-
-    if mtype == "player_id":
-        player_id = message.get("player")
-        last_message = f"You are Player {player_id}"
-        print(last_message)
-
-    elif mtype == "stage":
-        stage = message.get("stage", stage)
-        battle_started = (stage == "BATTLE")
-        game_over = (stage == "GAME_OVER")
-        your_turn = False
-        last_message = f"Stage: {stage}"
-        print(last_message)
-
-    elif mtype == "status":
-        # Meant for UI side panel; for 'stage' messaging for transitions
-        pass
-
-    elif mtype == "config":
-        ship_count = int(message.get("ship_count", 0))
-        last_message = f"Ship count set to {ship_count} (sizes 1..{ship_count})"
-        print(last_message)
-
-    elif mtype == "config_ok":
-        last_message = f"Server accepted ship_count={message.get('ship_count')}"
-        print(last_message)
-
-    elif mtype == "placement_ok":
-        last_message = "Server accepted ship placement. Waiting for opponent..."
-        print(last_message)
-
-    elif mtype == "start_battle":
-        # Meant for compatibility purposes
-        stage = "BATTLE"
-        battle_started = True
-        your_turn = False
-        last_message = "Battle started!"
-        print(last_message)
-        
-    elif mtype == "your_turn":
-        your_turn = True
-        last_message = "Your turn."
-        print(last_message)
-        
-    elif mtype == "bomb_result":
-        r = int(message.get("row", -1))
-        c = int(message.get("col", -1))
-        hit = bool(message.get("hit"))
-        sunk = bool(message.get("sunk"))
-        
-        target_grid[r][c] = "X" if hit else "O"
-        your_turn = False
-        
-        if message.get("game_over"):
-            winner = message.get("winner")
-            last_message = "You win!" if winner == player_id else "You lost."
-        else:
-            if hit and sunk:
-                last_message = "Hit and sunk a ship!"
-            elif hit:
-                last_message = "Hit!"
-            else:
-                last_message = "Miss."
-        
-        print(last_message)
-        
-    elif mtype == "incoming_shot":
-        r = int(message.get("row", -1))
-        c = int(message.get("col", -1))
-        hit = bool(message.get("hit"))
-        
-        receive_shot(r, c)
-        
-        if message.get("game_over"):
-            winner = message.get("winner")
-            last_message = "You win!" if winner == player_id else "You lost."
-        else:
-            last_message = "Opponent hit you!" if hit else "Opponent missed."
-        
-        print(last_message)
-        
-    elif mtype == "game_over":
-        winner = message.get("winner")
-        last_message = "You win!" if winner == player_id else "You lost."
-        print(last_message)
-        
-    elif mtype == "error":
-        last_message = "Server error: " + str(message.get("message", ""))
-        print(last_message)
-    
-    elif mtype == "info":
-        last_message = str(message.get("message", ""))
-        print(last_message)
-"""
 
 # Config / Ship Count (Player 0 chooses)
 def set_ship_count(n):
@@ -446,3 +312,144 @@ def reset_game():
 
     print("Game has been reset.")
     return True
+
+
+############################################################################# Message Handling #############################################################################
+
+# handle_server_message --> This function handles json messages passed to it by the servergit 
+def handle_server_message(message):
+    global player_id
+    global GAME_STATE
+    global ship_count
+
+    if message["type"] == "player_id":
+        player_id = message["player"]
+        print(f"You are Player {player_id}")
+
+    elif message["type"] == "bomb":
+        row = message["row"]
+        col = message["col"]
+        receive_shot(row, col)
+
+    # elif message["type"] == "set_game_state":
+    #     GAME_STATE = message["state"]
+
+    elif message["type"] == "set_ship_count":
+        ship_count = message["count"]
+    
+    else:
+        print(f"Unknown Message: {message}")
+
+def listen_to_server():
+    while True:
+        try:
+            data = sock.recv(4096).decode()
+            if data:
+                message = json.loads(data)
+                handle_server_message(message)
+        except:
+            break
+
+threading.Thread(target=listen_to_server, daemon=True).start() # Thread that constantly listens for messages
+
+
+# Server Message Handling V2? Potential whole addition to server message handling; needs testing.
+"""
+def handle_server_message(message):
+    global player_id, ship_count, stage, your_turn, battle_started, game_over, last_message
+
+    mtype = message.get("type")
+
+    if mtype == "player_id":
+        player_id = message.get("player")
+        last_message = f"You are Player {player_id}"
+        print(last_message)
+
+    elif mtype == "stage":
+        stage = message.get("stage", stage)
+        battle_started = (stage == "BATTLE")
+        game_over = (stage == "GAME_OVER")
+        your_turn = False
+        last_message = f"Stage: {stage}"
+        print(last_message)
+
+    elif mtype == "status":
+        # Meant for UI side panel; for 'stage' messaging for transitions
+        pass
+
+    elif mtype == "config":
+        ship_count = int(message.get("ship_count", 0))
+        last_message = f"Ship count set to {ship_count} (sizes 1..{ship_count})"
+        print(last_message)
+
+    elif mtype == "config_ok":
+        last_message = f"Server accepted ship_count={message.get('ship_count')}"
+        print(last_message)
+
+    elif mtype == "placement_ok":
+        last_message = "Server accepted ship placement. Waiting for opponent..."
+        print(last_message)
+
+    elif mtype == "start_battle":
+        # Meant for compatibility purposes
+        stage = "BATTLE"
+        battle_started = True
+        your_turn = False
+        last_message = "Battle started!"
+        print(last_message)
+        
+    elif mtype == "your_turn":
+        your_turn = True
+        last_message = "Your turn."
+        print(last_message)
+        
+    elif mtype == "bomb_result":
+        r = int(message.get("row", -1))
+        c = int(message.get("col", -1))
+        hit = bool(message.get("hit"))
+        sunk = bool(message.get("sunk"))
+        
+        target_grid[r][c] = "X" if hit else "O"
+        your_turn = False
+        
+        if message.get("game_over"):
+            winner = message.get("winner")
+            last_message = "You win!" if winner == player_id else "You lost."
+        else:
+            if hit and sunk:
+                last_message = "Hit and sunk a ship!"
+            elif hit:
+                last_message = "Hit!"
+            else:
+                last_message = "Miss."
+        
+        print(last_message)
+        
+    elif mtype == "incoming_shot":
+        r = int(message.get("row", -1))
+        c = int(message.get("col", -1))
+        hit = bool(message.get("hit"))
+        
+        receive_shot(r, c)
+        
+        if message.get("game_over"):
+            winner = message.get("winner")
+            last_message = "You win!" if winner == player_id else "You lost."
+        else:
+            last_message = "Opponent hit you!" if hit else "Opponent missed."
+        
+        print(last_message)
+        
+    elif mtype == "game_over":
+        winner = message.get("winner")
+        last_message = "You win!" if winner == player_id else "You lost."
+        print(last_message)
+        
+    elif mtype == "error":
+        last_message = "Server error: " + str(message.get("message", ""))
+        print(last_message)
+    
+    elif mtype == "info":
+        last_message = str(message.get("message", ""))
+        print(last_message)
+"""

@@ -17,7 +17,7 @@ print("Server waiting for players...")
 clients = []
 
 # Accept two players
-for i in range(2):
+for i in range(1,3):
     conn, addr = server.accept()
     print(f"Player {i} connected from {addr}")
     clients.append(conn)
@@ -46,12 +46,18 @@ def handle_client(player_index):
             print(f"Received from Player {player_index}: {message}")
 
             # Forward message to opponent
-            print(f"Sends {message} to other player")
-            opponent.send(json.dumps(message).encode())
-
+            if message["type"] == "ship_count":
+                print(f"Sends {message} to other player")
+                new_message = {
+                    "type": "set_ship_count",
+                    "count": message["count"]
+                }
+                opponent.send(json.dumps(new_message).encode())
+            else:
+                opponent.send(json.dumps(message).encode())
 
         except:
-            print("SERVER ERROR: MESSAGE ERROR 2")
+            print(f"SERVER ERROR: MESSAGE ERROR 2")
             break
 
     conn.close()
