@@ -1,0 +1,107 @@
+Messages:
+	# Sent from the server to assign a player their ID
+	type: player_id
+		player: int
+		
+	# Sent to the server to update the game state of the sender
+	type: game_state
+		state: string (GAME_STATE)
+		sender: int (player_id)
+		
+	# Sent from the server to both players to set the ship count
+	type: set_ship_count
+		count: int
+		
+	# Sent from the server once both players have placed and locked in their ships
+	type: all_ships_locked
+		--No Attributes--
+		
+	# When sent to the server, it forwards it to the other player to represent a bomb being shot
+	type: bomb
+		row: int
+		col: int
+		
+	# Received after sending the "bomb" message. Lets user know if their bomb hit/miss, sunk a ship and/or ended the game
+	type: hit_status
+		coord: (int,int)
+		status: bool
+		sunk: bool
+		all_sunk: bool
+
+Global Variables (backend):
+	grid[]: int
+	target_grid[]: int
+	ship_count: int
+	# Ships stored as arrays of coordinate tuples
+	# For example: [[(0,0)], [(2,3),(2,4)], [(5,1),(6,1),(7,1)]]
+	ships[]: int[]
+
+	# Identity and match state
+	player_id: int
+	your_turn: bool
+	game_over: bool
+	ships_locked: bool
+	all_ships_locked: bool
+
+	# Game state
+	GAME_STATE: string
+
+	# Track shots received and sent
+	shots_received_hit: (int,int)
+	shots_received_miss: (int,int)
+	shots_sent_hit: (int,int)
+	shots_sent_miss: (int,int)
+
+Server Functions (backend):
+	_send(message)
+		# Sends the passed json message to the server
+	handle_server_message(message)
+		# Called whenever a message is passed
+	listen_to_server()
+		# Always running on a separate thread and calls hander_server_message() whenever it receives a message
+
+Other Functions (backend):
+	in_bounds(row,col)
+		returns bool
+	compute_ship_cells(row,col,size,orientation):
+		returns cells
+	is_straight_and_contiguous(cells,size)
+		returns bool
+	can_place_ship(cells)
+		returns bool
+	remove_ship_from_grid(cells)
+		removes a ship from the grid
+	update_game_state(new_state)
+		updates the gamestate in the backend
+		sends "game_state" message to server
+		no return
+	update_ship_count(ship_count)
+		sends ship_count message to server
+	set_ship_count(count)
+		sets the global ship_count to count
+	place_ship(row,col,size,orientation)
+		places a ship on the grid
+		returns bool
+	submit_placement()
+		sends the ships to the server
+		sets global "ships_locked" to True
+	can_send_bomb(row,col)
+		returns bool
+	send_bomb(row,col)
+		sends "bomb" message with coordinates to server
+	receive_shot(row,col)
+		called when client receives a "bomb" message
+		sends the server a "hit_status" message
+	get_ship_index(row,col)
+		given coordinates, returns the index of the ship in the ships array (-1 if absent)
+		returns int
+	check_ship_sunk(ship_index)
+		returns bool
+	all_ships_sunk()
+		returns bool
+	ship_hit_counts()
+		gets the number of times each ship has been hit
+		returns int[]
+	reset_game()
+		resets game
+		returns bool
