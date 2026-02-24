@@ -68,7 +68,7 @@ ships = []
 
 # Identity and match state
 player_id = None
-stage = "WAIT_FOR_CONFIG" # server-authoritative
+# stage = "WAIT_FOR_CONFIG" # server-authoritative
 your_turn = False
 # battle_started = False
 game_over = False
@@ -235,7 +235,7 @@ def can_send_bomb(row, col):
     return True
 
 def send_bomb(row, col):
-    if stage != "BATTLE":
+    if GAME_STATE != "BATTLE":
         print("BOMB FAILED: Not in battle stage.")
         return
 
@@ -339,7 +339,7 @@ def ship_hit_counts():
 
 def reset_game():
     global grid, target_grid, ships, shots_received_hit, shot_received_miss, shots_sent_hit, shots_sent_miss
-    global ship_count, your_turn, battle_started, game_over, last_message, stage
+    global ship_count, your_turn, game_over, GAME_STATE
 
     grid = [["." for _ in range(BOARD_SIZE)] for _ in range(BOARD_SIZE)]
     target_grid = [["." for _ in range(BOARD_SIZE)] for _ in range(BOARD_SIZE)]
@@ -352,9 +352,8 @@ def reset_game():
 
     ship_count = 0
     your_turn = False
-    battle_started = False
     game_over = False
-    stage = "WAIT_FOR_CONFIG"
+    GAME_STATE = "SELECT_SHIPS"
 
     print("Game has been reset.")
     return True
