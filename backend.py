@@ -28,29 +28,29 @@ def _send(msg):
     #sock.sendall((json.dumps(msg) + "\n").encode("utf-8"))
     sock.send(json.dumps(msg).encode())
 
-def _recv_lines():
-    try:
-        chunk = sock.recv(4096)
-    except OSError:
-        return []
-    if not chunk:
-        return []
+# def _recv_lines():
+#     try:
+#         chunk = sock.recv(4096)
+#     except OSError:
+#         return []
+#     if not chunk:
+#         return []
 
-    _recv_buffer.extend(chunk)
+#     _recv_buffer.extend(chunk)
 
-    lines = []
+#     lines = []
 
-    while True:
-        idx = _recv_buffer.find(b"\n")
-        if idx == -1:
-            break
-        line = _recv_buffer[:idx].decode("utf-8", errors="replace")
-        del _recv_buffer[:idx + 1]
-        lines.append(line)
-    return lines
+#     while True:
+#         idx = _recv_buffer.find(b"\n")
+#         if idx == -1:
+#             break
+#         line = _recv_buffer[:idx].decode("utf-8", errors="replace")
+#         del _recv_buffer[:idx + 1]
+#         lines.append(line)
+#     return lines
 
 
-############################################################################# Memory and Functions #############################################################################
+############################################################################# Memory #############################################################################
 # Local Game State
 
 # 10x10 grid representation
@@ -72,7 +72,7 @@ stage = "WAIT_FOR_CONFIG" # server-authoritative
 your_turn = False
 battle_started = False
 game_over = False
-last_message = ""
+# last_message = ""
 ships_locked = False
 all_ships_locked = False
 
@@ -80,11 +80,14 @@ all_ships_locked = False
 GAME_STATE = "SELECT_SHIPS"
 
 # Track shots received and sent
-shots_received = []
-shots_sent = []
+shots_received_hit = []
+shots_received_miss = []
+shots_sent_hit = []
+shots_sent_miss = []
 
 _recv_buffer = bytearray()
 
+############################################################################# Pre-game Functions #############################################################################
 # Utility Functions
 def in_bounds(row, col):
     return 0 <= row < BOARD_SIZE and 0 <= col < BOARD_SIZE
@@ -133,13 +136,6 @@ def remove_ship_from_grid(cells):
         if in_bounds(r, c) and grid[r][c] == "S":
             grid[r][c] = "."
 
-def can_send_bomb(row, col):
-    if not in_bounds(row, col):
-        return False
-    if (row, col) in shots_sent:
-        return False
-    return True
-
 def update_game_state(new_state):
     global GAME_STATE
     GAME_STATE = new_state
@@ -150,34 +146,33 @@ def update_game_state(new_state):
         "sender": player_id # Sender
     }
 
-    sock.send(json.dumps(message).encode())
+    _send(message)
+    # sock.send(json.dumps(message).encode())
 
 def update_ship_count(ship_count):
+    if not (1 <= ship_count <= 5):
+        print("ship count must be 1-5")
+        return False
     
     message = {
         "type": "ship_count",
         "count": ship_count
     }
-
-    sock.send(json.dumps(message).encode())
-
-# Config / Ship Count (Player 0 chooses)
-def set_ship_count(n):
-    global ship_count
-    if not (1 <= n <= 5):
-        print("ship count must be 1..5")
-        return False
-    ship_count = n
-    print(f"Selected ship_count={ship_count}")
+    _send(message)
     return True
 
-def send_config(n):
-    msg = {
-        "type": "config",
-        "ship_count": n
-    }
-    print(f"Sending ship_count={n} to server")
-    _send(msg)
+# Config / Ship Count (Player 0 chooses)
+def set_ship_count(count):
+    global ship_count
+    ship_count = count
+
+# def send_config(n):
+#     msg = {
+#         "type": "config",
+#         "ship_count": n
+#     }
+#     print(f"Sending ship_count={n} to server")
+#     _send(msg)
 
 # Ship Placement
 def place_ship(row, col, size, orientation):
@@ -228,54 +223,93 @@ def submit_placement():
     print("Submitting ship placement to server")
     _send(msg)
 
+############################################################################# In-game Functions #############################################################################
 # Bombing Logic
+def can_send_bomb(row, col):
+    if not in_bounds(row, col):
+        return False
+    if (row, col) in shots_sent_hit:
+        return False
+    if (row, col) in shots_sent_miss:
+        return False
+    return True
 
 def send_bomb(row, col):
-    global last_message
-
     if stage != "BATTLE":
-        last_message = "Not in battle stage."
-        return {"error": "not_in_battle"}
+        print("BOMB FAILED: Not in battle stage.")
+        return
 
     if game_over:
-        last_message = "Game is over."
-        return {"error": "game_over"}
+        print("BOMB FAILED: Game is over.")
+        return
 
     if not your_turn:
-        last_message = "Not your turn."
-        return {"error": "not_your_turn"}
+        print("BOMB FAILED: Not your turn.")
+        return
 
     if not can_send_bomb(row, col):
-        last_message = "Invalid bomb (repeat or out of bounds)."
-        return {"error": "invalid_bomb"}
-
-    shots_sent.append((row, col))
+        print("BOMB FAILED: Invalid bomb (repeat or out of bounds).")
+        return
 
     msg = {
         "type": "bomb",
         "row": row,
         "col": col
     }
-    print(f"Bomb sent to {row},{col}")
-    _send(msg)
 
-    return {"sent": True}
+    _send(msg)
+    print(f"BOMB SENT: {row},{col}")
+    
 
 # Shot Handling (Local)
 def receive_shot(row, col):
     # Update local board when opponent fires at you.
-    if (row, col) in shots_received:
+    if (row, col) in shots_received_hit:
+        print("Repeat shot received.")
+        return
+    if (row, col) in shots_received_miss:
         print("Repeat shot received.")
         return
 
-    shots_received.append((row, col))
+    status = ""
 
     if grid[row][col] == "S":
         grid[row][col] = "X"
+        status = "hit"
+        shots_received_hit.append((row,col))
         print("Your ship was hit!")
     else:
         grid[row][col] = "O"
+        status = "miss"
+        shots_received_miss.apend((row,col))
         print("Opponent missed.")
+    
+    ship_index = get_ship_index(row,col)
+    sunk = check_ship_sunk(ship_index)
+    all_sunk = all_ships_sunk()
+
+    msg = {
+        "type": "hit_status",
+        "row": row,
+        "col": col,
+        "status": status,
+        "sunk": sunk,
+        "all_sunk": all_sunk
+    }
+
+    _send(msg)
+
+def get_ship_index(row, col):
+    # This function returns the ship index of a ship when passed one of its coordinates
+    # Returns -1 if no ship has that coordinate
+    target = (row,col)
+    index = next(
+        (i for i, ship in enumerate(ships) if target in ship),
+        None
+    )
+    if target is None:
+        return -1
+    return index
 
 def check_ship_sunk(ship_index):
     # Check if a specific ship is sunk.
@@ -304,22 +338,23 @@ def ship_hit_counts():
     return counts
 
 def reset_game():
-    global grid, target_grid, ships, shot_received, shots_sent
+    global grid, target_grid, ships, shots_received_hit, shot_received_miss, shots_sent_hit, shots_sent_miss
     global ship_count, your_turn, battle_started, game_over, last_message, stage
 
     grid = [["." for _ in range(BOARD_SIZE)] for _ in range(BOARD_SIZE)]
     target_grid = [["." for _ in range(BOARD_SIZE)] for _ in range(BOARD_SIZE)]
 
     ships = []
-    shots_received = []
-    shots_sent = []
+    shots_received_hit = []
+    shot_received_miss = []
+    shots_sent_hit = []
+    shots_sent_miss = []
 
     ship_count = 0
     your_turn = False
     battle_started = False
     game_over = False
     stage = "WAIT_FOR_CONFIG"
-    last_message = "Local state reset."
 
     print("Game has been reset.")
     return True
@@ -335,20 +370,25 @@ def handle_server_message(message):
         player_id = message["player"]
         print(f"You are Player {player_id}")
 
+    elif message["type"] == "set_ship_count":
+        set_ship_count(message["count"])
+    
+    elif message["type"] == "all_ships_locked":
+        all_ships_locked = True
+
     elif message["type"] == "bomb":
         row = message["row"]
         col = message["col"]
         receive_shot(row, col)
 
-    # elif message["type"] == "set_game_state":
-    #     GAME_STATE = message["state"]
-
-    elif message["type"] == "set_ship_count":
-        ship_count = message["count"]
-    
-    elif message["type"] == "all_ships_locked":
-        all_ships_locked = True
-    
+    elif message["type"] == "hit_status":
+        # This message is received after sending a bomb
+        # "status": True/False if the bomb was a hit/miss
+        coord = (message["row"], message["col"])
+        if message["status"] == True:
+            shots_sent_hit.append(coord)
+        elif message["status"] == False:
+            shots_sent_miss.append(coord)
     else:
         print(f"Unknown Message: {message}")
 

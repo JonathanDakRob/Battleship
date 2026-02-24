@@ -40,15 +40,25 @@ p2_game_state = None
 
 player_turn = 1
 
+GAME_OVER = False
+
 def handle_client(player_index):
     conn = clients[player_index]
     opponent = clients[1 - player_index]
 
 
-    global p1_game_state, p2_game_state, ships, player1_locked, player2_locked
+    global GAME_OVER, p1_game_state, p2_game_state, ships, player1_locked, player2_locked
 
     while True:
         try:
+            if GAME_OVER:
+                game_over_msg = {
+                    "type": "game_over",
+                    "status": True
+                }
+                conn.send(json.dumps(game_over_msg).encode())
+                opponent.send(json.dumps(game_over_msg).encode())
+
             data = conn.recv(4096).decode()
             if not data:
                 print("SERVER ERROR: MESSAGE ERROR 1")
@@ -71,6 +81,7 @@ def handle_client(player_index):
                     "type": "set_ship_count",
                     "count": message["count"]
                 }
+                conn.send(json.dumps(new_message).encode())
                 opponent.send(json.dumps(new_message).encode())
 
             elif message["type"] == "place_ships":
@@ -88,12 +99,16 @@ def handle_client(player_index):
                     conn.send(json.dumps(all_locked_msg).encode())
                     opponent.send(json.dumps(all_locked_msg).encode())
 
-            elif message["type"] == "shoot":
-                coord = message["coord"]
+            elif message["type"] == "bomb":
+                row = message["row"]
+                col = message["col"]
+                coord = (row,col)
                 print(f"SERVER: Player {player_index} shoots opponent at {coord}")
                 opponent.send(json.dump(message).encode())
 
             elif message["type"] == "hit_status":
+                if message["all_sunk"] == True:
+                    GAME_OVER = True
                 opponent.send(json.dump(message).encode())
 
             else:
