@@ -12,18 +12,23 @@ import os
 os.environ['SDL_VIDEO_CENTERED'] = '1' 
 
 GRID_SIZE = 10
-CELL_SIZE = 30       # Shrinks the squares so the window isn't too tall
-GRID_PADDING = 30    
-WINDOW_WIDTH = GRID_SIZE * CELL_SIZE + 2 * GRID_PADDING + 150 
-WINDOW_HEIGHT = (GRID_SIZE * CELL_SIZE * 2) + 4 * GRID_PADDING 
+CELL_SIZE = 20     # Shrinks the squares so the window isn't too tall
+LABEL_MARGIN= 20
+GRID_PADDING = 40
+WINDOW_WIDTH = (GRID_SIZE * CELL_SIZE) + (2 * GRID_PADDING) + 150 
+WINDOW_HEIGHT = (GRID_SIZE * CELL_SIZE * 2) + 180
 
 BG_COLOR = (30, 30, 30)
 GRID_COLOR = (200, 200, 200)
 HOVER_COLOR = (100, 180, 255)
+RESET_COLOR = (200, 50, 50)
 
 SHIP_COLOR = (180, 180, 180)
 SHIP_PADDING = 20
 SHIP_BLOCK_SIZE = CELL_SIZE
+
+LOCK_BUTTON_RECT = pygame.Rect(WINDOW_WIDTH // 2 - 90, WINDOW_HEIGHT - 50, 80, 30)
+RESET_BUTTON_RECT = pygame.Rect(WINDOW_WIDTH // 2 + 10, WINDOW_HEIGHT - 50, 80, 30)
 
 
 # ------------------ INIT ------------------
@@ -46,13 +51,16 @@ class Cell:
         pygame.draw.rect(surface, color, self.rect, 2)
 
     def handle_click(self):
+
+        letters = "ABCDEFGHIJ"
+        coord = f"{letters[self.row]}{self.col + 1}"
         
         #Data to be sent to the backend
         if self.grid_id == 0:
             backend.send_bomb(self.row, self.col)
 
 
-        print(f"Clicked Grid {self.grid_id}, Row {self.row}, Col {self.col}")
+        print(f"Clicked Grid {self.grid_id} at {coord} (Row {self.row}, Col {self.col})")
         return (self.grid_id, self.row, self.col)
 
 # ------------------ SHIP CLASS ------------------
@@ -61,6 +69,12 @@ class Ship:
         self.length = length
         self.x = x
         self.y = y
+        self.orig_x = x
+        self.orig_y = y
+        self.orig_row = None
+        self.orig_col = None
+        self.orig_orientation = "V"
+        self.last_valid_orientation = "V"
         self.orientation= "V" # Default to Vertical
         self.block_size = CELL_SIZE
         self.dragging = False
@@ -87,11 +101,21 @@ class Ship:
             pygame.draw.rect(surface, (50, 50, 50), rect, 2)
             
 
-    def handle_event(self, event):
+    def handle_event(self, event): #handles events related to dragging and placing a ship on a grid
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
             for rect in self.get_rects():
                 if rect.collidepoint(event.pos):
                     self.dragging = True
+                    self.orig_x = self.x
+                    self.orig_y = self.y
+                    self.orig_row = self.grid_row
+                    self.orig_col = self.grid_col
+                    self.orig_orientation = self.orientation
+
+                    if self.placed:
+                        cells = backend.compute_ship_cells(self.grid_row, self.grid_col, self.length, self.orientation)
+                        backend.remove_ship_from_grid(cells)
+                        self.placed = False
                     self.offset_x = self.x - event.pos[0]
                     self.offset_y = self.y - event.pos[1]
                     break
@@ -100,18 +124,35 @@ class Ship:
             if self.dragging:
                 self.dragging = False
                 
+                #Snapping
                 col = round((self.x - GRID_PADDING) / CELL_SIZE)
                 row = round((self.y - GRID_PADDING) / CELL_SIZE)
 
-                self.grid_col = col
-                self.grid_row = row
+                cells = backend.compute_ship_cells(row, col, self.length, self.orientation)
 
-                if backend.can_place_ship(backend.compute_ship_cells(row, col, self.length, self.orientation)):
+                if backend.can_place_ship(cells):
                     self.x = GRID_PADDING + col * CELL_SIZE
                     self.y = GRID_PADDING + row * CELL_SIZE
+                    self.grid_col = col
+                    self.grid_row = row
                     self.placed = True
+                    for r, c in cells:
+                        backend.grid[r][c] = "S"
                 else:
-                    self.placed = False 
+                    print("Invalid spot! Snapping back...")
+                    self.x = self.orig_x
+                    self.y = self.orig_y
+                    self.grid_row = self.orig_row
+                    self.grid_col = self.orig_col
+                    self.orientation = self.orig_orientation
+                
+                    if self.grid_row is not None:
+                        self.placed = True
+                        old_cells = backend.compute_ship_cells(self.grid_row, self.grid_col, self.length, self.orientation)
+                        for r, c in old_cells:
+                            backend.grid[r][c] = "S"
+                    else:
+                        self.placed = False
 
         elif event.type == pygame.KEYDOWN and self.dragging:
             # Press 'R' while dragging to rotate
@@ -128,8 +169,8 @@ class Ship:
 def draw_ship_selection():
     screen.fill(BG_COLOR)
 
-    font = pygame.font.SysFont(None, 48)
-    small_font = pygame.font.SysFont(None, 36)
+    font = pygame.font.SysFont(None, 32)
+    small_font = pygame.font.SysFont(None, 24)
 
     title_text = font.render("Select Number of Ships (1 - 5)", True, (255, 255, 255))
     instruction_text = small_font.render("Press a number key 1, 2, 3, 4, or 5", True, (200, 200, 200))
@@ -165,20 +206,20 @@ def create_ships(num_ships):
     global ships
     ships.clear()
 
-    ships_start_x = GRID_PADDING + GRID_SIZE * CELL_SIZE + SHIP_PADDING
-    ships_start_y = GRID_PADDING
+    ships_start_x = GRID_PADDING + GRID_SIZE * CELL_SIZE + 20
+    ships_start_y = top_grid_y
 
     for ship_length in range(1, num_ships + 1):
         ship = Ship(ship_length, ships_start_x, ships_start_y)
         ships.append(ship)
 
-        ships_start_y += (ship_length * CELL_SIZE) + SHIP_PADDING
+        ships_start_y += (ship_length * CELL_SIZE) + 10
 
 def draw_waiting_for_player(number, message):
     screen.fill(BG_COLOR)
 
-    font = pygame.font.SysFont(None, 48)
-    small_font = pygame.font.SysFont(None, 28)
+    font = pygame.font.SysFont(None, 30)
+    small_font = pygame.font.SysFont(None, 20)
 
     title = font.render(f"Waiting for Player {number}...", True, (255, 255, 255))
     subtitle = small_font.render(message, True, (180, 180, 180))
@@ -198,28 +239,28 @@ def draw_waiting_for_player(number, message):
 def draw_ship_placement():
     screen.fill(BG_COLOR)
 
-    grid_start_x = GRID_PADDING
-    grid_start_y = GRID_PADDING
+    draw_coordinates(GRID_PADDING, GRID_PADDING)
 
     for row in range(GRID_SIZE):
         for col in range(GRID_SIZE):
             rect = pygame.Rect(
-                grid_start_x + col * CELL_SIZE,
-                grid_start_y + row * CELL_SIZE,
+                GRID_PADDING + col * CELL_SIZE,
+                GRID_PADDING + row * CELL_SIZE,
                 CELL_SIZE,
                 CELL_SIZE
             )
             pygame.draw.rect(screen, GRID_COLOR, rect, 2)
 
+   
+    active_ship = None
     for ship in ships:
-        ship.draw(screen)
-
-    button_rect = pygame.Rect(WINDOW_WIDTH // 2 - 70, WINDOW_HEIGHT - 60, 140, 40)
-    pygame.draw.rect(screen, (50, 200, 50), button_rect)
+        if ship.dragging:
+            active_ship = ship
+        else:
+            ship.draw(screen)
     
-    font = pygame.font.SysFont(None, 24)
-    text = font.render("LOCK SHIPS", True, (255, 255, 255))
-    screen.blit(text, (button_rect.centerx - text.get_width() // 2, button_rect.centery - text.get_height() // 2))
+    if active_ship:
+        active_ship.draw(screen)
 
     #pygame.display.flip()
 
@@ -237,18 +278,60 @@ def create_grid(grid_id, start_x, start_y):
             cells.append(Cell(rect, grid_id, row, col))
     return cells
 
-top_grid_y = GRID_PADDING
-bottom_grid_y = GRID_PADDING * 2 + GRID_SIZE * CELL_SIZE
+top_grid_y = GRID_PADDING + 10
+bottom_grid_y = top_grid_y + (GRID_SIZE * CELL_SIZE) + 30
 
 top_grid = create_grid(0, GRID_PADDING, top_grid_y)
 bottom_grid = create_grid(1, GRID_PADDING, bottom_grid_y)
 
 all_cells = top_grid + bottom_grid
 
-# ------------------ DRAW LOCK BUTTON ------------------
+# ------------------ CONFIG UPDATES ------------------
+LABEL_MARGIN = 20  # Space for letters and numbers
+# Adjust GRID_PADDING if needed to ensure labels fit on screen
+GRID_PADDING = 40 
+
+# ------------------ COORDINATE DRAWING ------------------
+def draw_coordinates(start_x, start_y):
+    font = pygame.font.SysFont("monospace", 15, bold=True)
+    letters = "ABCDEFGHIJ"
+    
+    for i in range(GRID_SIZE):
+        # --- Draw Numbers (Horizontal: 1-10) ---
+        # Centered above each column
+        num_text = font.render(str(i + 1), True, (255, 255, 255))
+        num_x = start_x + (i * CELL_SIZE) + (CELL_SIZE // 2 - num_text.get_width() // 2)
+        num_y = start_y - LABEL_MARGIN
+        screen.blit(num_text, (num_x, num_y))
+        
+        # --- Draw Letters (Vertical: A-J) ---
+        # Centered to the left of each row
+        let_text = font.render(letters[i], True, (255, 255, 255))
+        let_x = start_x - LABEL_MARGIN
+        let_y = start_y + (i * CELL_SIZE) + (CELL_SIZE // 2 - let_text.get_height() // 2)
+        screen.blit(let_text, (let_x, let_y))
+
+# ------------------ DRAW LOCK AND RESET BUTTON ------------------
+def draw_control_buttons(mouse_pos):
+    # Lock Button
+    pygame.draw.rect(screen, (50, 200, 50), LOCK_BUTTON_RECT)
+    
+    # Reset Button
+    pygame.draw.rect(screen, RESET_COLOR, RESET_BUTTON_RECT)
+    
+    font = pygame.font.SysFont(None, 18)
+    lock_text = font.render("LOCK", True, (255, 255, 255))
+    reset_text = font.render("RESET", True, (255, 255, 255))
+    
+    screen.blit(lock_text, (LOCK_BUTTON_RECT.centerx - lock_text.get_width() // 2, LOCK_BUTTON_RECT.centery - lock_text.get_height() // 2))
+    screen.blit(reset_text, (RESET_BUTTON_RECT.centerx - reset_text.get_width() // 2, RESET_BUTTON_RECT.centery - reset_text.get_height() // 2))
+    
+    return LOCK_BUTTON_RECT, RESET_BUTTON_RECT
+
+    """
 def draw_lock_button(mouse_pos):
     # Place button at the bottom center
-    button_rect = pygame.Rect(WINDOW_WIDTH // 2 - 70, WINDOW_HEIGHT - 60, 140, 40)
+    button_rect = pygame.Rect(WINDOW_WIDTH // 2 - 70, WINDOW_HEIGHT - 50, 140, 35)
     if button_rect.collidepoint(mouse_pos):
         color = (70, 230, 70)  
        
@@ -262,7 +345,7 @@ def draw_lock_button(mouse_pos):
     screen.blit(text, (button_rect.centerx - text.get_width() // 2, button_rect.centery - text.get_height() // 2))
     return button_rect
 
-
+"""
 # ------------------ MAIN LOOP ------------------
 # Please use these player_id variables when printing sending/printing things like: "Waiting For Player X"
 player1_id = 1 
@@ -320,29 +403,23 @@ while running:
                 ship.handle_event(event)
 
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-                lock_rect = pygame.Rect(WINDOW_WIDTH // 2 - 70, WINDOW_HEIGHT - 60, 140, 40)
-                if lock_rect.collidepoint(event.pos):
-                    print("Ships Locked! Sending to server...")
-                    if lock_rect.collidepoint(event.pos):
+                if RESET_BUTTON_RECT.collidepoint(event.pos):
+                    print("Resetting Ships...")
+                    # Clear the backend grid
+                    backend.grid = [["." for _ in range(GRID_SIZE)] for _ in range(GRID_SIZE)]
+                    for ship in ships:
+                        ship.placed = False
+                        ship.x, ship.y = ship.orig_x, ship.orig_y # Back to tray
+                        ship.grid_row, ship.grid_col = None, None
 
-                        all_valid = True
-
-                        for ship in ships:
-                            if not ship.placed:
-                                all_valid = False
-                                break
-
-                        if all_valid:
-                            for ship in ships:
-                                backend.place_ship(
-                                    ship.grid_row,
-                                    ship.grid_col,
-                                    ship.length,
-                                    ship.orientation
-                                )
-
-                    backend.submit_placement() # Calls the  backend function
-                    backend.update_game_state("WAITING_FOR_OPPONENT")
+                elif LOCK_BUTTON_RECT.collidepoint(event.pos):
+                    all_valid = all(s.placed for s in ships)
+                    if all_valid:
+                        backend.ships.clear()
+                        for s in ships:
+                            backend.ships.append(backend.compute_ship_cells(s.grid_row, s.grid_col, s.length, s.orientation)) #
+                        backend.submit_placement() #
+                        backend.update_game_state("WAITING_FOR_OPPONENT")
 
         # ------------------ WAITING FOR OTHER PLAYER STATE ------------------
         elif backend.GAME_STATE == "WAITING_FOR_OPPONENT":
@@ -370,13 +447,17 @@ while running:
     
     elif backend.GAME_STATE == "PLACE_SHIPS":
         draw_ship_placement()
-        draw_lock_button(mouse_pos)
+        draw_coordinates(GRID_PADDING, GRID_PADDING)
+        draw_control_buttons(mouse_pos)
+        
     
     elif backend.GAME_STATE == "WAITING_FOR_OPPONENT":
         draw_waiting_for_player(opponent_id, f"Player {opponent_id} is still placing their ships")
 
     elif backend.GAME_STATE == "RUNNING_GAME":
         screen.fill(BG_COLOR)
+        draw_coordinates(GRID_PADDING, top_grid_y)
+        draw_coordinates(GRID_PADDING, bottom_grid_y)
         for cell in all_cells:
             cell.draw(screen, mouse_pos)
         

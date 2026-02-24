@@ -127,6 +127,12 @@ def can_place_ship(cells):
             return False
     return True
 
+def remove_ship_from_grid(cells):
+    global grid
+    for r, c in cells:
+        if in_bounds(r, c) and grid[r][c] == "S":
+            grid[r][c] = "."
+
 def can_send_bomb(row, col):
     if not in_bounds(row, col):
         return False
