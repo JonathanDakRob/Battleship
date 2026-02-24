@@ -38,6 +38,8 @@ player2_locked = False
 p1_game_state = None
 p2_game_state = None
 
+player_turn = 1
+
 def handle_client(player_index):
     conn = clients[player_index]
     opponent = clients[1 - player_index]
@@ -85,6 +87,14 @@ def handle_client(player_index):
                     }
                     conn.send(json.dumps(all_locked_msg).encode())
                     opponent.send(json.dumps(all_locked_msg).encode())
+
+            elif message["type"] == "shoot":
+                coord = message["coord"]
+                print(f"SERVER: Player {player_index} shoots opponent at {coord}")
+                opponent.send(json.dump(message).encode())
+
+            elif message["type"] == "hit_status":
+                opponent.send(json.dump(message).encode())
 
             else:
                 print(f"Sends {message} to other player")
