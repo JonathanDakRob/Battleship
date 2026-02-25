@@ -53,14 +53,12 @@ class Cell:
 
         letters = "ABCDEFGHIJ"
         coord = f"{letters[self.row]}{self.col + 1}"
-        
-        #Data to be sent to the backend
-        if self.grid_id == 0:
-            backend.send_bomb(self.row, self.col)
-
 
         print(f"Clicked Grid {self.grid_id} at {coord} (Row {self.row}, Col {self.col})")
         return self.grid_id, self.row, self.col
+    
+    def get_coords(self):
+         return self.row, self.col
 
 # ------------------ SHIP CLASS ------------------
 class Ship:
@@ -400,7 +398,7 @@ else:
 running = True
 ships_selected = False # Used to move on from ship selection stage
 
-print(f"You Are Player {backend.player_id}")
+print(f"BOARD: You Are Player {backend.player_id}")
 
 # Optional: give Player 1 the first turn when RUNNING_GAME begins
 # This is a simple local rule; can be replaced with server-authoritative turns.
@@ -468,8 +466,6 @@ while running:
 
         # ------------------ WAITING FOR OTHER PLAYER STATE ------------------
         elif backend.GAME_STATE == "WAITING_FOR_OPPONENT":
-            print(f"Player {backend.player_id} Locked: {backend.ships_locked}")
-            print(f"All Ships Locked: {backend.all_ships_locked}")
             if backend.all_ships_locked:
                 backend.update_game_state("RUNNING_GAME")
 
@@ -484,12 +480,19 @@ while running:
 
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 # Gate input so only the active player can fire
-                if backend.your_turn and not backend.game_over and not backend.pending_shot:
+                #if backend.your_turn:
                     # Only allow shots on the opponent grid (top grid)
-                    for cell in top_grid:
-                        if cell.rect.collidepoint(mouse_pos):
-                            cell.handle_click()
-                            break
+
+                for cell in top_grid:
+                    if cell.rect.collidepoint(mouse_pos):
+                        cell.handle_click()
+                        click_row, click_col = cell.get_coords()
+
+                        # Can only send bomb if it is your turn
+                        if backend.your_turn:
+                            print(f"FRONTEND: Sending Bomb to {click_row, click_col}")
+                            backend.send_bomb(click_row, click_col)
+                        break
 
     # ------------------ DRAWING ------------------
     if backend.GAME_STATE == "SELECT_SHIPS":

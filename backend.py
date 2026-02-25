@@ -27,50 +27,7 @@ _recv_buffer = bytearray()
 
 # Networking Helpers
 def _send(msg):
-    # Newline helps if the server uses line-based JSON framing.
-    # data = (json.dumps(msg) + "\n").encode("utf-8")
-    # sock.sendall(data)
-    sock.send(json.dumps(msg).encode())
-
-# def _recv_messages():
-    # This receiver supports both: newline-framed JSON and single JSON packets.
-    # It returns a list of decoded JSON dicts.
-    # try:
-    #     chunk = sock.recv(4096)
-    # except OSError:
-    #   return []
-
-    # if not chunk:
-    #   return []
-
-    # _recv_buffer.extend(chunk)
-
-    # messages = []
-
-    # If newline framing exists, parse lines first.
-    # while True:
-    #   idx = _recv_buffer.find(b"\n")
-    #   if idx == -1:
-    #      break
-    #   line = _recv_buffer[:idx].decode("utf-8", errors="replace").strip()
-    #   del _recv_buffer[:idx + 1]
-    #   if not line:
-    #       contine
-    #   try:
-    #       messages.append(json,loads(line))
-    #   except json.JSONDecodeError:
-    #       pass
-    # Fallback: if no newline was used and buffer looks like a full JSON object, try parse it.
-    # if messages == []
-    #   try:
-    #       text = _recv_buffer.decode("utf-8", error="replace").strip()
-    #       if text.startswith("{") and text.endswith("}"):
-    #           messages.append(json.loads(text))
-    #           _recv_buffer.clear()
-    #   except:
-    #       pass
-    #
-    #   return messages
+    sock.sendall((json.dumps(msg)+ "\n").encode())
 
 ############################################################################# Memory #############################################################################
 # Local Game State
@@ -106,7 +63,7 @@ shots_sent_hit = []
 shots_sent_miss = []
 
 # Prevent firing multiple shots before the server replies with hit_status
-pending_shot = False
+# pending_shot = False # Commented out for simplicity. Keeping things simple and clean for now
 
 ############################################################################# Pre-game Functions #############################################################################
 # Utility Functions
@@ -176,7 +133,10 @@ def update_ship_count(count):
         print("ship count must be 1-5")
         return False
     
-    message = {"type": "ship_count", "count": count}
+    message = {
+        "type": "ship_count",
+        "count": count
+    }
     _send(message)
     return True
 
@@ -219,7 +179,10 @@ def submit_placement():
     # Send ship coordinate arrays to server so opponent can start after both lock.
     payload = [{"cells": [[r, c] for (r, c) in ship]} for ship in ships]
 
-    msg = {"type": "place_ships", "ships": payload}
+    msg = {
+        "type": "place_ships",
+        "ships": payload
+    }
     
     ships_locked = True
     print("Submitting ship placement to server")
@@ -238,7 +201,7 @@ def can_send_bomb(row, col):
     return True
 
 def send_bomb(row, col):
-    global pending_shot, your_turn
+    global your_turn, GAME_STATE, game_over
 
     # This is the main gate: only shoot during RUNNING_GAME.
     if GAME_STATE != "RUNNING_GAME":
@@ -256,18 +219,23 @@ def send_bomb(row, col):
         return
 
     # Prevent double-click spam until hit_status arrives.
-    if pending_shot:
-        print("BOMB FAILED: Waiting for shot result.")
-        return
+    # if pending_shot:
+    #     print("BOMB FAILED: Waiting for shot result.")
+    #     return
 
     if not can_send_bomb(row, col):
         print("BOMB FAILED: Invalid bomb (repeat or out of bounds).")
         return
 
-    pending_shot = True # Lock out extra shots until result message comes back
-    your_turn = False # End turn locally; server/game rules can refine later
+    # pending_shot = True # Lock out extra shots until result message comes back
+    # your_turn = False # End turn locally; server/game rules can refine later
 
-    msg = {"type": "bomb", "row": row, "col": col}
+    msg = {
+        "type": "bomb",
+        "row": row,
+        "col": col
+    }
+
     _send(msg)
     print(f"BOMB SENT: {row},{col}")
 
@@ -299,6 +267,8 @@ def all_ships_sunk():
 # Shot Handling (Local)
 def receive_shot(row, col):
     # Applies opponent shot to our grid and sends hit_status back for their UI.
+    global shots_received_hit, shots_received_miss, grid
+
     if (row, col) in shots_received_hit or (row, col) in shots_received_miss:
         print("Repeat shot received.")
         return
@@ -343,7 +313,7 @@ def ship_hit_counts():
 def reset_game():
     global grid, target_grid, ships
     global shots_received_hit, shots_received_miss, shots_sent_hit, shots_sent_miss
-    global ship_count, your_turn, game_over, GAME_STATE, pending_shot
+    global ship_count, your_turn, game_over, GAME_STATE
     global ships_locked, all_ships_locked
 
     grid = [["." for _ in range(BOARD_SIZE)] for _ in range(BOARD_SIZE)]
@@ -357,7 +327,7 @@ def reset_game():
 
     ship_count = 0
     your_turn = False
-    pending_shot = False
+    # pending_shot = False
     game_over = False
     GAME_STATE = "SELECT_SHIPS"
     ships_locked = False
@@ -370,60 +340,46 @@ def reset_game():
 
 # handle_server_message --> This function handles JSON messages passed to it by the servergit
 def handle_server_message(message):
-    global player_id, GAME_STATE, ships_locked, all_ships_locked
-    global pending_shot, game_over, your_turn
+    global player_id, GAME_STATE, ship_count, ships_locked, all_ships_locked, your_turn
 
-    mtype = message.get["type"]
+    mtype = message["type"]
 
     if mtype == "player_id":
-        player_id = message.get["player"]
+        player_id = message["player"]
         print(f"You are Player {player_id}")
 
     elif mtype == "set_ship_count":
-        set_ship_count(message.get("count", 0))
-    
+        set_ship_count(message["count"])
+
     elif mtype == "all_ships_locked":
-        # Both clients can now transition into RUNNING_GAME safely.
         all_ships_locked = True
 
-    elif mtype == "game_state":
-        # Optional stage-sync messages (for development purposes).
-        GAME_STATE = message.get("state", GAME_STATE)
-
     elif mtype == "bomb":
-        # Opponent fired at us; we update our board and reply with hit_status.
+        # When opponent fires a bomb at us, we respond with a hit_status message
         row = message["row"]
         col = message["col"]
         receive_shot(row, col)
 
-        # After defending, it becomes our turn in a simple alternating-turn model.
-        your_turn = True
-        pending_shot = False
-
     elif mtype == "hit_status":
-        # We get this after OUR bomb; update target grid and unlock next steps.
-        row = message["row"]
-        col = message["col"]
-        coord = (row, col)
-
-        hit = bool(message.get("status"))
-        if hit:
+        # This message is received after sending a bomb
+        # "status": True/False if the bomb was a hit/miss
+        coord = (message["row"], message["col"])
+        if message["status"] == True:
             shots_sent_hit.append(coord)
-            target_grid[row][col] = "X" # Mark hit on opponent board
-        else:
+        elif message["status"] == False:
             shots_sent_miss.append(coord)
-            target_grid[row][col] = "O" # Mark miss on opponent board
 
-        pending_shot = False # Shot result arrived; allow future shots when it's our turn again.
-
-        # If opponent says all_sunk, that means they lost and we won.
-        if message.get("all_sunk") is True:
-            game_over = True
-            print("GAME OVER: You win!")
+    elif mtype == "change_turn":
+        if your_turn:
+            print("BACKEND: Opponent's Turn Now")
+            your_turn = False
+        else:
+            print("BACKEND: Your Turn Now")
+            your_turn = True
 
     elif mtype == "game_over":
-        game_over = True
-        print("GAME OVER")
+        game_over == True
+        print("BACKEND: GAME OVER!")
 
     else:
         print(f"Unknown Message: {message}")
@@ -438,4 +394,5 @@ def listen_to_server():
         except:
             break
 
+print("BACKEND: Listening To Server...")
 threading.Thread(target=listen_to_server, daemon=True).start() # Thread that constantly listens for messages
