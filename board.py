@@ -321,15 +321,21 @@ def draw_backend_ships():
 
 def draw_mark_cell(cell_value, origin_y, row, col):
     # Only draw for hit/miss cells.
-    if cell_value not in ("X", "O"):
+    if cell_value not in ("X", "O", "D"):
         return
 
     x = GRID_PADDING + col * CELL_SIZE
     y = origin_y + row * CELL_SIZE
     rect = pygame.Rect(x, y, CELL_SIZE, CELL_SIZE)
 
-    # Red = hit, Blue = miss
-    color = (220, 80, 80) if cell_value == "X" else (80, 140, 220)
+    # Red = hit, Blue = miss, Dark red = sunk
+    color = None
+    if cell_value == "X":
+        color = (220, 80, 80)
+    elif cell_value == "O":
+        color = (80, 140, 220)
+    elif cell_value == "D":
+        color = (255, 40, 40)
     pygame.draw.rect(screen, color, rect)
     pygame.draw.rect(screen, (50, 50, 50), rect, 2)
 

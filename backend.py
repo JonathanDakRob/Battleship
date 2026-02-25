@@ -37,6 +37,7 @@ def _send(msg):
 # "S" = ship
 # "X" = hit
 # "O" = miss
+# "D" = sunk
 grid = [["." for _ in range(BOARD_SIZE)] for _ in range(BOARD_SIZE)]
 target_grid = [["." for _ in range(BOARD_SIZE)] for _ in range(BOARD_SIZE)]
 
@@ -274,19 +275,22 @@ def receive_shot(row, col):
         return
 
     hit = (grid[row][col] == "S")
+    ship_index = get_ship_index(row,col)
+    sunk = check_ship_sunk(ship_index) # True if this hit finished the ship
+    all_sunk = all_ships_sunk() # True if we have no ships left
 
     if hit:
-        grid[row][col] = "X" # Mark damage on our ship
         shots_received_hit.append((row,col))
-        print("Your ship was hit!")
+        if sunk:
+            grid[row][col] = "D"
+            print("Your ship was sunk!")
+        else:
+            grid[row][col] = "X" # Mark damage on our ship
+            print("Your ship was hit!")
     else:
         grid[row][col] = "O" # Mark opponent miss on the board
         shots_received_miss.append((row,col))
         print("Opponent missed.")
-    
-    ship_index = get_ship_index(row,col)
-    sunk = check_ship_sunk(ship_index) # True if this hit finished the ship
-    all_sunk = all_ships_sunk() # True if we have no ships left
 
     msg = {
         "type": "hit_status",
@@ -303,7 +307,12 @@ def handle_hit_status(status, row, col, sunk, all_sunk):
 
     if status:
         shots_sent_hit.append(coord)
-        target_grid[row][col] = "X"
+        if sunk:
+            target_grid[row][col] = "D"
+            print("You sunk a battleship!")
+        else:
+            target_grid[row][col] = "X"
+            print("Your shot hit!")
     else:
         shots_sent_miss.append(coord)
         target_grid[row][col] = "O"
