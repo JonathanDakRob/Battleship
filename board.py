@@ -351,7 +351,6 @@ def draw_status_panel():
         f"Player: {backend.player_id}",
         f"State: {backend.GAME_STATE}",
         f"Your turn: {backend.your_turn}",
-        f"Pending: {backend.pending_shot}",
         f"Game over: {backend.game_over}",
         f"Hits sent: {len(backend.shots_sent_hit)}",
         f"Miss sent: {len(backend.shots_sent_miss)}",
@@ -519,6 +518,7 @@ while running:
         
         # Draw backend ships and hit/miss overlays on bottom grid
         draw_backend_ships()
+        draw_status_panel()
         draw_marks()
 
     pygame.display.flip()
