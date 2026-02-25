@@ -4,6 +4,7 @@
 import socket
 import json
 import threading
+import time
 
 SERVER_IP = "127.0.0.1"
 PORT = 5000
@@ -18,37 +19,58 @@ while True:
         break
     except ConnectionRefusedError:
         print("Waiting for server...")
-        import time
         time.sleep(1)
 
 print("Connected to server")
 
+_recv_buffer = bytearray()
+
 # Networking Helpers
 def _send(msg):
-    #sock.sendall((json.dumps(msg) + "\n").encode("utf-8"))
+    # Newline helps if the server uses line-based JSON framing.
+    # data = (json.dumps(msg) + "\n").encode("utf-8")
+    # sock.sendall(data)
     sock.send(json.dumps(msg).encode())
 
-# def _recv_lines():
-#     try:
-#         chunk = sock.recv(4096)
-#     except OSError:
-#         return []
-#     if not chunk:
-#         return []
+# def _recv_messages():
+    # This receiver supports both: newline-framed JSON and single JSON packets.
+    # It returns a list of decoded JSON dicts.
+    # try:
+    #     chunk = sock.recv(4096)
+    # except OSError:
+    #   return []
 
-#     _recv_buffer.extend(chunk)
+    # if not chunk:
+    #   return []
 
-#     lines = []
+    # _recv_buffer.extend(chunk)
 
-#     while True:
-#         idx = _recv_buffer.find(b"\n")
-#         if idx == -1:
-#             break
-#         line = _recv_buffer[:idx].decode("utf-8", errors="replace")
-#         del _recv_buffer[:idx + 1]
-#         lines.append(line)
-#     return lines
+    # messages = []
 
+    # If newline framing exists, parse lines first.
+    # while True:
+    #   idx = _recv_buffer.find(b"\n")
+    #   if idx == -1:
+    #      break
+    #   line = _recv_buffer[:idx].decode("utf-8", errors="replace").strip()
+    #   del _recv_buffer[:idx + 1]
+    #   if not line:
+    #       contine
+    #   try:
+    #       messages.append(json,loads(line))
+    #   except json.JSONDecodeError:
+    #       pass
+    # Fallback: if no newline was used and buffer looks like a full JSON object, try parse it.
+    # if messages == []
+    #   try:
+    #       text = _recv_buffer.decode("utf-8", error="replace").strip()
+    #       if text.startswith("{") and text.endswith("}"):
+    #           messages.append(json.loads(text))
+    #           _recv_buffer.clear()
+    #   except:
+    #       pass
+    #
+    #   return messages
 
 ############################################################################# Memory #############################################################################
 # Local Game State
@@ -68,24 +90,23 @@ ships = []
 
 # Identity and match state
 player_id = None
-# stage = "WAIT_FOR_CONFIG" # server-authoritative
 your_turn = False
-# battle_started = False
 game_over = False
-# last_message = ""
 ships_locked = False
 all_ships_locked = False
 
 # Game state
+# SELECT_SHIPS -> PLACE_SHIPS -> WAITING_FOR_OPPONENT -> RUNNING_GAME
 GAME_STATE = "SELECT_SHIPS"
 
-# Track shots received and sent
+# Track shot outcomes (for UI & debugging)
 shots_received_hit = []
 shots_received_miss = []
 shots_sent_hit = []
 shots_sent_miss = []
 
-_recv_buffer = bytearray()
+# Prevent firing multiple shots before the server replies with hit_status
+pending_shot = False
 
 ############################################################################# Pre-game Functions #############################################################################
 # Utility Functions
@@ -131,6 +152,7 @@ def can_place_ship(cells):
     return True
 
 def remove_ship_from_grid(cells):
+    # Clears old ship footprint when a ship is moved
     global grid
     for r, c in cells:
         if in_bounds(r, c) and grid[r][c] == "S":
@@ -140,47 +162,37 @@ def update_game_state(new_state):
     global GAME_STATE
     GAME_STATE = new_state
 
+    # This keeps both clients stage-synced during development.
     message = {
         "type": "game_state",
         "state": GAME_STATE,
         "sender": player_id # Sender
     }
-
     _send(message)
-    # sock.send(json.dumps(message).encode())
 
-def update_ship_count(ship_count):
-    if not (1 <= ship_count <= 5):
+def update_ship_count(count):
+    # Player 1 selects ship count; server forwards to both clients.
+    if not (1 <= count <= 5):
         print("ship count must be 1-5")
         return False
     
-    message = {
-        "type": "ship_count",
-        "count": ship_count
-    }
+    message = {"type": "ship_count", "count": count}
     _send(message)
     return True
 
-# Config / Ship Count (Player 0 chooses)
 def set_ship_count(count):
     global ship_count
     ship_count = count
 
-# def send_config(n):
-#     msg = {
-#         "type": "config",
-#         "ship_count": n
-#     }
-#     print(f"Sending ship_count={n} to server")
-#     _send(msg)
-
-# Ship Placement
+############################################################################# Ship Placement #############################################################################
 def place_ship(row, col, size, orientation):
     # Place a ship locally and store coordinates in ships array.
     orientation = (orientation or "").strip().upper()
+
     if size > 1 and orientation not in ("H", "V"):
         print("Invalid orientation. Use 'H' or 'V'.")
         return False
+
     if size <= 1:
         orientation = "H"
 
@@ -194,30 +206,20 @@ def place_ship(row, col, size, orientation):
         print("Invalid ship placement.")
         return False
 
-    # Mark ship on grid
     for r, c in cells:
-        grid[r][c] = "S"
+        grid[r][c] = "S" # Marks ship presence on the board
 
-    # Save ship coordinates
-    ships.append(cells)
-
+    ships.append(cells) # Saves ship cells for later hit/sunk logic
     print(f"Ship of size {size} placed at {cells}")
     return True
 
 def submit_placement():
-    # Send ship coordinate arrays to server
     global ships_locked
-    payload = []
 
-    for ship in ships:
-        payload.append({
-            "cells": [[r, c] for (r, c) in ship]
-        })
+    # Send ship coordinate arrays to server so opponent can start after both lock.
+    payload = [{"cells": [[r, c] for (r, c) in ship]} for ship in ships]
 
-    msg = {
-        "type": "place_ships",
-        "ships": payload
-    }
+    msg = {"type": "place_ships", "ships": payload}
     
     ships_locked = True
     print("Submitting ship placement to server")
@@ -226,6 +228,7 @@ def submit_placement():
 ############################################################################# In-game Functions #############################################################################
 # Bombing Logic
 def can_send_bomb(row, col):
+    # Prevents repeats and out-of-bounds shots on opponent grid.
     if not in_bounds(row, col):
         return False
     if (row, col) in shots_sent_hit:
@@ -235,84 +238,51 @@ def can_send_bomb(row, col):
     return True
 
 def send_bomb(row, col):
-    if GAME_STATE != "BATTLE":
-        print("BOMB FAILED: Not in battle stage.")
+    global pending_shot, your_turn
+
+    # This is the main gate: only shoot during RUNNING_GAME.
+    if GAME_STATE != "RUNNING_GAME":
+        print("BOMB FAILED: Not in RUNNING_GAME.")
         return
 
+    # Game over blocks interaction.
     if game_over:
         print("BOMB FAILED: Game is over.")
         return
 
+    # Turn-based gating prevents both players shooting at once.
     if not your_turn:
         print("BOMB FAILED: Not your turn.")
+        return
+
+    # Prevent double-click spam until hit_status arrives.
+    if pending_shot:
+        print("BOMB FAILED: Waiting for shot result.")
         return
 
     if not can_send_bomb(row, col):
         print("BOMB FAILED: Invalid bomb (repeat or out of bounds).")
         return
 
-    msg = {
-        "type": "bomb",
-        "row": row,
-        "col": col
-    }
+    pending_shot = True # Lock out extra shots until result message comes back
+    your_turn = False # End turn locally; server/game rules can refine later
 
+    msg = {"type": "bomb", "row": row, "col": col}
     _send(msg)
     print(f"BOMB SENT: {row},{col}")
-    
-
-# Shot Handling (Local)
-def receive_shot(row, col):
-    # Update local board when opponent fires at you.
-    if (row, col) in shots_received_hit:
-        print("Repeat shot received.")
-        return
-    if (row, col) in shots_received_miss:
-        print("Repeat shot received.")
-        return
-
-    status = ""
-
-    if grid[row][col] == "S":
-        grid[row][col] = "X"
-        status = "hit"
-        shots_received_hit.append((row,col))
-        print("Your ship was hit!")
-    else:
-        grid[row][col] = "O"
-        status = "miss"
-        shots_received_miss.apend((row,col))
-        print("Opponent missed.")
-    
-    ship_index = get_ship_index(row,col)
-    sunk = check_ship_sunk(ship_index)
-    all_sunk = all_ships_sunk()
-
-    msg = {
-        "type": "hit_status",
-        "row": row,
-        "col": col,
-        "status": status,
-        "sunk": sunk,
-        "all_sunk": all_sunk
-    }
-
-    _send(msg)
 
 def get_ship_index(row, col):
-    # This function returns the ship index of a ship when passed one of its coordinates
-    # Returns -1 if no ship has that coordinate
+    # Returns the ship index containing (row, col), or -1 if no ship occupies it.
     target = (row,col)
-    index = next(
-        (i for i, ship in enumerate(ships) if target in ship),
-        None
-    )
-    if target is None:
-        return -1
-    return index
+    for i, ship in enumerate(ships):
+        if target in ship:
+            return i
+    return -1
 
 def check_ship_sunk(ship_index):
-    # Check if a specific ship is sunk.
+    # True if every cell in this ship has been hit ("X").
+    if ship_index < 0 or ship_index >= len(ships):
+        return False
     ship = ships[ship_index]
     for r, c in ship:
         if grid[r][c] != "X":
@@ -320,14 +290,47 @@ def check_ship_sunk(ship_index):
     return True
 
 def all_ships_sunk():
-    # Return True if every ship is sunk.
+    # True if all ships are sunk; used for loss condition.
     for i in range(len(ships)):
         if not check_ship_sunk(i):
             return False
     return True
 
+# Shot Handling (Local)
+def receive_shot(row, col):
+    # Applies opponent shot to our grid and sends hit_status back for their UI.
+    if (row, col) in shots_received_hit or (row, col) in shots_received_miss:
+        print("Repeat shot received.")
+        return
+
+    hit = (grid[row][col] == "S")
+
+    if hit:
+        grid[row][col] = "X" # Mark damage on our ship
+        shots_received_hit.append((row,col))
+        print("Your ship was hit!")
+    else:
+        grid[row][col] = "O" # Mark opponent miss on the board
+        shots_received_miss.append((row,col))
+        print("Opponent missed.")
+    
+    ship_index = get_ship_index(row,col)
+    sunk = check_ship_sunk(ship_index) # True if this hit finished the ship
+    all_sunk = all_ships_sunk() # True if we have no ships left
+
+    msg = {
+        "type": "hit_status",
+        "row": row,
+        "col": col,
+        "status": hit, # Shooter expects boolean hit/miss
+        "sunk": sunk,
+        "all_sunk": all_sunk
+    }
+    _send(msg)
+
 # Helper: hit counts per ship
 def ship_hit_counts():
+    # Returns list like [hits_on_ship1, hits_on_ship2, ...]
     counts = []
     for ship in ships:
         hits = 0
@@ -338,56 +341,90 @@ def ship_hit_counts():
     return counts
 
 def reset_game():
-    global grid, target_grid, ships, shots_received_hit, shot_received_miss, shots_sent_hit, shots_sent_miss
-    global ship_count, your_turn, game_over, GAME_STATE
+    global grid, target_grid, ships
+    global shots_received_hit, shots_received_miss, shots_sent_hit, shots_sent_miss
+    global ship_count, your_turn, game_over, GAME_STATE, pending_shot
+    global ships_locked, all_ships_locked
 
     grid = [["." for _ in range(BOARD_SIZE)] for _ in range(BOARD_SIZE)]
     target_grid = [["." for _ in range(BOARD_SIZE)] for _ in range(BOARD_SIZE)]
 
     ships = []
     shots_received_hit = []
-    shot_received_miss = []
+    shots_received_miss = []
     shots_sent_hit = []
     shots_sent_miss = []
 
     ship_count = 0
     your_turn = False
+    pending_shot = False
     game_over = False
     GAME_STATE = "SELECT_SHIPS"
+    ships_locked = False
+    all_ships_locked = False
 
     print("Game has been reset.")
     return True
 
-
 ############################################################################# Message Handling #############################################################################
 
-# handle_server_message --> This function handles json messages passed to it by the servergit 
+# handle_server_message --> This function handles JSON messages passed to it by the servergit
 def handle_server_message(message):
-    global player_id, GAME_STATE, ship_count, ships_locked, all_ships_locked
+    global player_id, GAME_STATE, ships_locked, all_ships_locked
+    global pending_shot, game_over, your_turn
 
-    if message["type"] == "player_id":
-        player_id = message["player"]
+    mtype = message.get["type"]
+
+    if mtype == "player_id":
+        player_id = message.get["player"]
         print(f"You are Player {player_id}")
 
-    elif message["type"] == "set_ship_count":
-        set_ship_count(message["count"])
+    elif mtype == "set_ship_count":
+        set_ship_count(message.get("count", 0))
     
-    elif message["type"] == "all_ships_locked":
+    elif mtype == "all_ships_locked":
+        # Both clients can now transition into RUNNING_GAME safely.
         all_ships_locked = True
 
-    elif message["type"] == "bomb":
+    elif mtype == "game_state":
+        # Optional stage-sync messages (for development purposes).
+        GAME_STATE = message.get("state", GAME_STATE)
+
+    elif mtype == "bomb":
+        # Opponent fired at us; we update our board and reply with hit_status.
         row = message["row"]
         col = message["col"]
         receive_shot(row, col)
 
-    elif message["type"] == "hit_status":
-        # This message is received after sending a bomb
-        # "status": True/False if the bomb was a hit/miss
-        coord = (message["row"], message["col"])
-        if message["status"] == True:
+        # After defending, it becomes our turn in a simple alternating-turn model.
+        your_turn = True
+        pending_shot = False
+
+    elif mtype == "hit_status":
+        # We get this after OUR bomb; update target grid and unlock next steps.
+        row = message["row"]
+        col = message["col"]
+        coord = (row, col)
+
+        hit = bool(message.get("status"))
+        if hit:
             shots_sent_hit.append(coord)
-        elif message["status"] == False:
+            target_grid[row][col] = "X" # Mark hit on opponent board
+        else:
             shots_sent_miss.append(coord)
+            target_grid[row][col] = "O" # Mark miss on opponent board
+
+        pending_shot = False # Shot result arrived; allow future shots when it's our turn again.
+
+        # If opponent says all_sunk, that means they lost and we won.
+        if message.get("all_sunk") is True:
+            game_over = True
+            print("GAME OVER: You win!")
+
+    elif mtype == "game_over":
+        game_over = True
+        print("GAME OVER")
+
     else:
         print(f"Unknown Message: {message}")
 
@@ -402,105 +439,3 @@ def listen_to_server():
             break
 
 threading.Thread(target=listen_to_server, daemon=True).start() # Thread that constantly listens for messages
-
-
-# Server Message Handling V2? Potential whole addition to server message handling; needs testing.
-"""
-def handle_server_message(message):
-    global player_id, ship_count, stage, your_turn, battle_started, game_over, last_message
-
-    mtype = message.get("type")
-
-    if mtype == "player_id":
-        player_id = message.get("player")
-        last_message = f"You are Player {player_id}"
-        print(last_message)
-
-    elif mtype == "stage":
-        stage = message.get("stage", stage)
-        battle_started = (stage == "BATTLE")
-        game_over = (stage == "GAME_OVER")
-        your_turn = False
-        last_message = f"Stage: {stage}"
-        print(last_message)
-
-    elif mtype == "status":
-        # Meant for UI side panel; for 'stage' messaging for transitions
-        pass
-
-    elif mtype == "config":
-        ship_count = int(message.get("ship_count", 0))
-        last_message = f"Ship count set to {ship_count} (sizes 1..{ship_count})"
-        print(last_message)
-
-    elif mtype == "config_ok":
-        last_message = f"Server accepted ship_count={message.get('ship_count')}"
-        print(last_message)
-
-    elif mtype == "placement_ok":
-        last_message = "Server accepted ship placement. Waiting for opponent..."
-        print(last_message)
-
-    elif mtype == "start_battle":
-        # Meant for compatibility purposes
-        stage = "BATTLE"
-        battle_started = True
-        your_turn = False
-        last_message = "Battle started!"
-        print(last_message)
-        
-    elif mtype == "your_turn":
-        your_turn = True
-        last_message = "Your turn."
-        print(last_message)
-        
-    elif mtype == "bomb_result":
-        r = int(message.get("row", -1))
-        c = int(message.get("col", -1))
-        hit = bool(message.get("hit"))
-        sunk = bool(message.get("sunk"))
-        
-        target_grid[r][c] = "X" if hit else "O"
-        your_turn = False
-        
-        if message.get("game_over"):
-            winner = message.get("winner")
-            last_message = "You win!" if winner == player_id else "You lost."
-        else:
-            if hit and sunk:
-                last_message = "Hit and sunk a ship!"
-            elif hit:
-                last_message = "Hit!"
-            else:
-                last_message = "Miss."
-        
-        print(last_message)
-        
-    elif mtype == "incoming_shot":
-        r = int(message.get("row", -1))
-        c = int(message.get("col", -1))
-        hit = bool(message.get("hit"))
-        
-        receive_shot(r, c)
-        
-        if message.get("game_over"):
-            winner = message.get("winner")
-            last_message = "You win!" if winner == player_id else "You lost."
-        else:
-            last_message = "Opponent hit you!" if hit else "Opponent missed."
-        
-        print(last_message)
-        
-    elif mtype == "game_over":
-        winner = message.get("winner")
-        last_message = "You win!" if winner == player_id else "You lost."
-        print(last_message)
-        
-    elif mtype == "error":
-        last_message = "Server error: " + str(message.get("message", ""))
-        print(last_message)
-    
-    elif mtype == "info":
-        last_message = str(message.get("message", ""))
-        print(last_message)
-"""

@@ -4,16 +4,15 @@
 
 import pygame
 import sys
-
+import os
 import backend
 
 # ------------------ CONFIG ------------------
-import os
 os.environ['SDL_VIDEO_CENTERED'] = '1' 
 
 GRID_SIZE = 10
 CELL_SIZE = 20     # Shrinks the squares so the window isn't too tall
-LABEL_MARGIN= 20
+LABEL_MARGIN = 20
 GRID_PADDING = 40
 WINDOW_WIDTH = (GRID_SIZE * CELL_SIZE) + (2 * GRID_PADDING) + 150 
 WINDOW_HEIGHT = (GRID_SIZE * CELL_SIZE * 2) + 180
@@ -61,7 +60,7 @@ class Cell:
 
 
         print(f"Clicked Grid {self.grid_id} at {coord} (Row {self.row}, Col {self.col})")
-        return (self.grid_id, self.row, self.col)
+        return self.grid_id, self.row, self.col
 
 # ------------------ SHIP CLASS ------------------
 class Ship:
@@ -112,7 +111,7 @@ class Ship:
                     self.orig_col = self.grid_col
                     self.orig_orientation = self.orientation
 
-                    if self.placed:
+                    if self.placed and self.grid_row is not None and self.grid_col is not None:
                         cells = backend.compute_ship_cells(self.grid_row, self.grid_col, self.length, self.orientation)
                         backend.remove_ship_from_grid(cells)
                         self.placed = False
@@ -159,12 +158,10 @@ class Ship:
             if event.key == pygame.K_r:
                 self.orientation = "H" if self.orientation == "V" else "V"
 
-        elif event.type == pygame.MOUSEMOTION:
-            if self.dragging:
+        elif event.type == pygame.MOUSEMOTION and self.dragging:
                 self.x = event.pos[0] + self.offset_x
                 self.y = event.pos[1] + self.offset_y
 
-    
 # ------------------ SHIP SELECTION ------------------
 def draw_ship_selection():
     screen.fill(BG_COLOR)
@@ -179,25 +176,6 @@ def draw_ship_selection():
     screen.blit(instruction_text, (WINDOW_WIDTH // 2 - instruction_text.get_width() // 2, WINDOW_HEIGHT // 2))
 
     #pygame.display.flip()
-
-def draw_backend_ships():
-    """
-    Draw ships stored in backend.ships onto the bottom grid.
-    Assumes backend.ships is a list of lists of (row, col) tuples.
-
-    Meant for the RUNNING_GAME state
-    """
-
-    for ship in backend.ships:
-        for (row, col) in ship:
-
-            x = GRID_PADDING + col * CELL_SIZE
-            y = bottom_grid_y + row * CELL_SIZE
-
-            rect = pygame.Rect(x, y, CELL_SIZE, CELL_SIZE)
-
-            pygame.draw.rect(screen, (0, 200, 0), rect)
-            pygame.draw.rect(screen, (50, 50, 50), rect, 2)
 
 # ------------------ SHIP PLACEMENT ------------------
 ships = []
@@ -287,9 +265,10 @@ bottom_grid = create_grid(1, GRID_PADDING, bottom_grid_y)
 all_cells = top_grid + bottom_grid
 
 # ------------------ CONFIG UPDATES ------------------
-LABEL_MARGIN = 20  # Space for letters and numbers
+# Redundancy? Already exist close to the beginning of board.py.
+# LABEL_MARGIN = 20  # Space for letters and numbers
 # Adjust GRID_PADDING if needed to ensure labels fit on screen
-GRID_PADDING = 40 
+# GRID_PADDING = 40
 
 # ------------------ COORDINATE DRAWING ------------------
 def draw_coordinates(start_x, start_y):
@@ -328,7 +307,70 @@ def draw_control_buttons(mouse_pos):
     
     return LOCK_BUTTON_RECT, RESET_BUTTON_RECT
 
-    """
+# ------------------ RUNNING_GAME DRAW HELPERS ------------------
+def draw_backend_ships():
+    # Draw ships stored in backend.ships onto the bottom grid.
+    # Assumes backend.ships is a list of lists of (row, col) tuples.
+    # Meant for the RUNNING_GAME state
+    for row in range(GRID_SIZE):
+        for col in range(GRID_SIZE):
+            if backend.grid[row][col] == "S":
+                x = GRID_PADDING + col * CELL_SIZE
+                y = bottom_grid_y + row * CELL_SIZE
+                rect = pygame.Rect(x, y, CELL_SIZE, CELL_SIZE)
+                pygame.draw.rect(screen, (0, 200, 0), rect)
+                pygame.draw.rect(screen, (50, 50, 50), rect, 2)
+
+def draw_mark_cell(cell_value, origin_y, row, col):
+    # Only draw for hit/miss cells.
+    if cell_value not in ("X", "O"):
+        return
+
+    x = GRID_PADDING + col * CELL_SIZE
+    y = origin_y + row * CELL_SIZE
+    rect = pygame.Rect(x, y, CELL_SIZE, CELL_SIZE)
+
+    # Red = hit, Blue = miss
+    color = (220, 80, 80) if cell_value == "X" else (80, 140, 220)
+    pygame.draw.rect(screen, color, rect)
+    pygame.draw.rect(screen, (50, 50, 50), rect, 2)
+
+def draw_marks():
+    # Draw opponent board marks (top) and your board marks (bottom) in one pass.
+    for r in range(GRID_SIZE):
+        for c in range(GRID_SIZE):
+            draw_mark_cell(backend.target_grid[r][c], top_grid_y, r, c)  # Your shots
+            draw_mark_cell(backend.grid[r][c], bottom_grid_y, r, c)  # Opponent shots
+
+def draw_status_panel():
+    # Simple UI panel to explain state during demo
+    panel_x = GRID_PADDING + GRID_SIZE * CELL_SIZE + 15
+    panel_y = 30
+
+    font = pygame.font.SysFont(None, 20)
+
+    lines = [
+        f"Player: {backend.player_id}",
+        f"State: {backend.GAME_STATE}",
+        f"Your turn: {backend.your_turn}",
+        f"Pending: {backend.pending_shot}",
+        f"Game over: {backend.game_over}",
+        f"Hits sent: {len(backend.shots_sent_hit)}",
+        f"Miss sent: {len(backend.shots_sent_miss)}",
+        f"Hits recv: {len(backend.shots_received_hit)}",
+        f"Miss recv: {len(backend.shots_received_miss)}",
+    ]
+
+    for i, text in enumerate(lines):
+        surf = font.render(text, True, (230, 230, 230))
+        screen.blit(surf, (panel_x, panel_y + i * 22))
+
+    # Clear visible win/lose message
+    if backend.game_over:
+        big = pygame.font.SysFont(None, 28)
+        msg = big.render("GAME OVER", True, (255, 100, 100))
+        screen.blit(msg, (panel_x, panel_y + 10 + len(lines) * 22))
+
 def draw_lock_button(mouse_pos):
     # Place button at the bottom center
     button_rect = pygame.Rect(WINDOW_WIDTH // 2 - 70, WINDOW_HEIGHT - 50, 140, 35)
@@ -345,7 +387,6 @@ def draw_lock_button(mouse_pos):
     screen.blit(text, (button_rect.centerx - text.get_width() // 2, button_rect.centery - text.get_height() // 2))
     return button_rect
 
-"""
 # ------------------ MAIN LOOP ------------------
 # Please use these player_id variables when printing sending/printing things like: "Waiting For Player X"
 player1_id = 1 
@@ -360,6 +401,10 @@ running = True
 ships_selected = False # Used to move on from ship selection stage
 
 print(f"You Are Player {backend.player_id}")
+
+# Optional: give Player 1 the first turn when RUNNING_GAME begins
+# This is a simple local rule; can be replaced with server-authoritative turns.
+started_running_game = False
 
 while running:
     mouse_pos = pygame.mouse.get_pos()
@@ -418,7 +463,7 @@ while running:
                         backend.ships.clear()
                         for s in ships:
                             backend.ships.append(backend.compute_ship_cells(s.grid_row, s.grid_col, s.length, s.orientation)) #
-                        backend.submit_placement() #
+                        backend.submit_placement()
                         backend.update_game_state("WAITING_FOR_OPPONENT")
 
         # ------------------ WAITING FOR OTHER PLAYER STATE ------------------
@@ -430,13 +475,21 @@ while running:
 
         # ------------------ RUNNING GAME STATE ------------------
         elif backend.GAME_STATE == "RUNNING_GAME":
-            #TODO: Create Gameplay Loop
-            
-            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-                for cell in all_cells:
-                    if cell.rect.collidepoint(mouse_pos):
-                        cell.handle_click()
+            # Initialize turn rule once when the match begins
+            if not started_running_game:
+                started_running_game = True
 
+                # This gives Player 1 the first move without needing server logic yet.
+                backend.your_turn = (backend.player_id == player1_id)
+
+            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                # Gate input so only the active player can fire
+                if backend.your_turn and not backend.game_over and not backend.pending_shot:
+                    # Only allow shots on the opponent grid (top grid)
+                    for cell in top_grid:
+                        if cell.rect.collidepoint(mouse_pos):
+                            cell.handle_click()
+                            break
 
     # ------------------ DRAWING ------------------
     if backend.GAME_STATE == "SELECT_SHIPS":
@@ -461,11 +514,11 @@ while running:
         for cell in all_cells:
             cell.draw(screen, mouse_pos)
         
-        # Draw backend ships on bottom grid
+        # Draw backend ships and hit/miss overlays on bottom grid
         draw_backend_ships()
+        draw_marks()
 
     pygame.display.flip()
-
     clock.tick(60)
 
 pygame.quit()
