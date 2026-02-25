@@ -298,6 +298,16 @@ def receive_shot(row, col):
     }
     _send(msg)
 
+def handle_hit_status(status, row, col, sunk, all_sunk):
+    coord = (row,col)
+
+    if status:
+        shots_sent_hit.append(coord)
+        target_grid[row][col] = "X"
+    else:
+        shots_sent_miss.append(coord)
+        target_grid[row][col] = "O"
+
 # Helper: hit counts per ship
 def ship_hit_counts():
     # Returns list like [hits_on_ship1, hits_on_ship2, ...]
@@ -363,11 +373,13 @@ def handle_server_message(message):
     elif mtype == "hit_status":
         # This message is received after sending a bomb
         # "status": True/False if the bomb was a hit/miss
-        coord = (message["row"], message["col"])
-        if message["status"] == True:
-            shots_sent_hit.append(coord)
-        elif message["status"] == False:
-            shots_sent_miss.append(coord)
+        status = message["status"]
+        row = message["row"]
+        col = message["col"]
+        sunk = message["sunk"]
+        all_sunk = message["sunk"]
+
+        handle_hit_status(status,row,col,sunk,all_sunk)
 
     elif mtype == "change_turn":
         if your_turn:

@@ -23,7 +23,8 @@ Messages:
 		
 	# Received after sending the "bomb" message. Lets user know if their bomb hit/miss, sunk a ship and/or ended the game
 	type: hit_status
-		coord: (int,int)
+		row: int
+		col: int
 		status: bool
 		sunk: bool
 		all_sunk: bool
