@@ -333,9 +333,9 @@ def draw_mark_cell(cell_value, origin_y, row, col):
     if cell_value == "X":
         color = (220, 80, 80)
     elif cell_value == "O":
-        color = (80, 140, 220)
+        color = (225, 225, 220)
     elif cell_value == "D":
-        color = (255, 40, 40)
+        color = (125, 40, 40)
     pygame.draw.rect(screen, color, rect)
     pygame.draw.rect(screen, (50, 50, 50), rect, 2)
 

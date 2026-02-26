@@ -242,18 +242,31 @@ def send_bomb(row, col):
 
 def get_ship_index(row, col):
     # Returns the ship index containing (row, col), or -1 if no ship occupies it.
-    target = (row,col)
-    for i, ship in enumerate(ships):
-        if target in ship:
+    target = (row, col)
+    print(f"BACKEND: get_ship_index - {target}")
+    for i in range(0,len(ships)):
+        print(f"BACKEND: Checking index {i}, ship {ships[i]} for {target}")
+        if target in ships[i]:
+            print("FOUND!")
             return i
+        else:
+            print("NOT FOUND.")
     return -1
+
+def get_ship_coords(ship_index):
+    global ships
+
+    ship = ships[ship_index]
+    return ship
 
 def check_ship_sunk(ship_index):
     # True if every cell in this ship has been hit ("X").
+    print(f"BACKEND: Checking ship {ship_index} index")
     if ship_index < 0 or ship_index >= len(ships):
         return False
     ship = ships[ship_index]
     for r, c in ship:
+        print(f"Ship {r}, {c} = {grid[r][c]}")
         if grid[r][c] != "X":
             return False
     return True
@@ -265,6 +278,21 @@ def all_ships_sunk():
             return False
     return True
 
+def sink_opp_ship(ship_coords):
+    global target_grid
+
+    for r, c in ship_coords:
+        target_grid[r][c] = "D"
+        print(f"Grid ({r},{c}) = {target_grid[r][c]}")
+
+def sink_own_ship(ship_index):
+    global ships, grid
+    ship = ships[ship_index]
+
+    for r, c in ship:
+        grid[r][c] = "D"
+        print(f"Grid ({r},{c}) = {grid[r][c]}")
+
 # Shot Handling (Local)
 def receive_shot(row, col):
     # Applies opponent shot to our grid and sends hit_status back for their UI.
@@ -275,22 +303,33 @@ def receive_shot(row, col):
         return
 
     hit = (grid[row][col] == "S")
-    ship_index = get_ship_index(row,col)
-    sunk = check_ship_sunk(ship_index) # True if this hit finished the ship
-    all_sunk = all_ships_sunk() # True if we have no ships left
+    print(f"Hit: {hit}")
+    ship_index = get_ship_index(row, col)
+    print(f"Ship Index: {ship_index}")
+    sunk = False
+    all_sunk = False
+    ship_coords = None
 
     if hit:
+        grid[row][col] = "X" # Mark damage on our ship
         shots_received_hit.append((row,col))
+        print("Your ship was hit!")
+        sunk = check_ship_sunk(ship_index) # True if this hit finished the ship
+        print(f"Sunk: {sunk}")
+        
         if sunk:
-            grid[row][col] = "D"
+            sink_own_ship(ship_index)
+            print(f"Ship sunk {row}, {col}")
+            ship_coords = get_ship_coords(ship_index)
+            all_sunk = all_ships_sunk() # True if we have no ships left
             print("Your ship was sunk!")
-        else:
-            grid[row][col] = "X" # Mark damage on our ship
-            print("Your ship was hit!")
+            
     else:
         grid[row][col] = "O" # Mark opponent miss on the board
         shots_received_miss.append((row,col))
         print("Opponent missed.")
+    
+    print(f"BACKEND: Receiving shot ({row},{col}) - Hit: {hit}, Index: {ship_index}, Sunk: {sunk}, All Sunk: {all_sunk}")
 
     msg = {
         "type": "hit_status",
@@ -298,17 +337,18 @@ def receive_shot(row, col):
         "col": col,
         "status": hit, # Shooter expects boolean hit/miss
         "sunk": sunk,
+        "ship_coords": ship_coords,
         "all_sunk": all_sunk
     }
     _send(msg)
 
-def handle_hit_status(status, row, col, sunk, all_sunk):
+def handle_hit_status(status, row, col, sunk, ship_coords, all_sunk):
     coord = (row,col)
 
     if status:
         shots_sent_hit.append(coord)
         if sunk:
-            target_grid[row][col] = "D"
+            sink_opp_ship(ship_coords)
             print("You sunk a battleship!")
         else:
             target_grid[row][col] = "X"
@@ -386,9 +426,10 @@ def handle_server_message(message):
         row = message["row"]
         col = message["col"]
         sunk = message["sunk"]
+        ship_coords = message["ship_coords"]
         all_sunk = message["sunk"]
 
-        handle_hit_status(status,row,col,sunk,all_sunk)
+        handle_hit_status(status,row,col,sunk,ship_coords,all_sunk)
 
     elif mtype == "change_turn":
         if your_turn:
