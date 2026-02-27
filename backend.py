@@ -49,7 +49,7 @@ ships = []
 # Identity and match state
 player_id = None
 your_turn = False
-game_over = False
+winner = False
 ships_locked = False
 all_ships_locked = False
 
@@ -202,16 +202,11 @@ def can_send_bomb(row, col):
     return True
 
 def send_bomb(row, col):
-    global your_turn, GAME_STATE, game_over
+    global your_turn, GAME_STATE
 
     # This is the main gate: only shoot during RUNNING_GAME.
     if GAME_STATE != "RUNNING_GAME":
         print("BOMB FAILED: Not in RUNNING_GAME.")
-        return
-
-    # Game over blocks interaction.
-    if game_over:
-        print("BOMB FAILED: Game is over.")
         return
 
     # Turn-based gating prevents both players shooting at once.
@@ -273,9 +268,11 @@ def check_ship_sunk(ship_index):
 
 def all_ships_sunk():
     # True if all ships are sunk; used for loss condition.
-    for i in range(len(ships)):
-        if not check_ship_sunk(i):
-            return False
+    global ships
+    for ship in ships:
+        for r, c in ship:
+            if not grid[r][c] == "D":
+                return False
     return True
 
 def sink_opp_ship(ship_coords):
@@ -356,6 +353,14 @@ def handle_hit_status(status, row, col, sunk, ship_coords, all_sunk):
     else:
         shots_sent_miss.append(coord)
         target_grid[row][col] = "O"
+    
+    if all_sunk:
+        global player_id
+        game_over_msg = {
+            "type": "game_over",
+            "winner": player_id
+        }
+        _send(game_over_msg)
 
 # Helper: hit counts per ship
 def ship_hit_counts():
@@ -369,10 +374,20 @@ def ship_hit_counts():
         counts.append(hits)
     return counts
 
+def handle_game_over(winner_id):
+    global winner, player_id, GAME_STATE
+    GAME_STATE = "GAME_OVER"
+    if winner_id == player_id:
+        winner = True
+        print("GAME OVER! YOU WIN!")
+    else:
+        winner = False
+        print("GAME OVER! YOU LOSE.")    
+
 def reset_game():
     global grid, target_grid, ships
     global shots_received_hit, shots_received_miss, shots_sent_hit, shots_sent_miss
-    global ship_count, your_turn, game_over, GAME_STATE
+    global ship_count, your_turn, GAME_STATE
     global ships_locked, all_ships_locked
 
     grid = [["." for _ in range(BOARD_SIZE)] for _ in range(BOARD_SIZE)]
@@ -386,8 +401,7 @@ def reset_game():
 
     ship_count = 0
     your_turn = False
-    # pending_shot = False
-    game_over = False
+
     GAME_STATE = "SELECT_SHIPS"
     ships_locked = False
     all_ships_locked = False
@@ -427,7 +441,7 @@ def handle_server_message(message):
         col = message["col"]
         sunk = message["sunk"]
         ship_coords = message["ship_coords"]
-        all_sunk = message["sunk"]
+        all_sunk = message["all_sunk"]
 
         handle_hit_status(status,row,col,sunk,ship_coords,all_sunk)
 
@@ -440,8 +454,8 @@ def handle_server_message(message):
             your_turn = True
 
     elif mtype == "game_over":
-        game_over == True
-        print("BACKEND: GAME OVER!")
+        winner_id = message["winner"]
+        handle_game_over(winner_id)
 
     else:
         print(f"Unknown Message: {message}")

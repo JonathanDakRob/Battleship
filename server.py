@@ -45,6 +45,7 @@ p2_game_state = None
 player_turn = 1
 
 GAME_OVER = False
+winner = None
 
 def handle_message(conn, player_index, message):
     opponent = clients[1 - player_index]
@@ -101,6 +102,14 @@ def handle_message(conn, player_index, message):
             send(opponent,changeTurn_msg)
             send(conn,changeTurn_msg)
         send(opponent,message)
+    
+    elif message["type"] == "game_over":
+        global winner
+        GAME_OVER = True
+        winner = message["winner"]
+
+        send(opponent,message)
+        send(conn,message)
 
     else:
         print(f"Sends {message} to other player")

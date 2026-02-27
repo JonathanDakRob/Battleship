@@ -212,6 +212,32 @@ def draw_waiting_for_player(number, message):
          WINDOW_HEIGHT // 2 + 10)
     )
 
+def draw_game_over(winner):
+    screen.fill(BG_COLOR)
+
+    font = pygame.font.SysFont(None, 30)
+    small_font = pygame.font.SysFont(None, 20)
+
+    title = title = font.render(f"GAME OVER", True, (255, 255, 255))
+    subtitle = ""
+
+    if winner:
+        subtitle = small_font.render("Victory!!!", True, (180, 180, 180))
+    else:
+        subtitle = small_font.render("Defeat...", True, (180, 180, 180))
+
+    screen.blit(
+        title,
+        (WINDOW_WIDTH // 2 - title.get_width() // 2,
+         WINDOW_HEIGHT // 2 - title.get_height())
+    )
+
+    screen.blit(
+        subtitle,
+        (WINDOW_WIDTH // 2 - subtitle.get_width() // 2,
+         WINDOW_HEIGHT // 2 + 10)
+    )
+
 def draw_ship_placement():
     screen.fill(BG_COLOR)
 
@@ -355,11 +381,9 @@ def draw_status_panel():
 
     lines = [
         f"Player: {backend.player_id}",
-        f"State: {backend.GAME_STATE}",
         f"Your turn: {backend.your_turn}",
-        f"Game over: {backend.game_over}",
-        f"Hits sent: {len(backend.shots_sent_hit)}",
-        f"Miss sent: {len(backend.shots_sent_miss)}",
+        f"Shots hit: {len(backend.shots_sent_hit)}",
+        f"Shots missed: {len(backend.shots_sent_miss)}",
         f"Hits recv: {len(backend.shots_received_hit)}",
         f"Miss recv: {len(backend.shots_received_miss)}",
     ]
@@ -368,11 +392,11 @@ def draw_status_panel():
         surf = font.render(text, True, (230, 230, 230))
         screen.blit(surf, (panel_x, panel_y + i * 22))
 
-    # Clear visible win/lose message
-    if backend.game_over:
-        big = pygame.font.SysFont(None, 28)
-        msg = big.render("GAME OVER", True, (255, 100, 100))
-        screen.blit(msg, (panel_x, panel_y + 10 + len(lines) * 22))
+    # # Clear visible win/lose message
+    # if backend.game_over:
+    #     big = pygame.font.SysFont(None, 28)
+    #     msg = big.render("GAME OVER", True, (255, 100, 100))
+    #     screen.blit(msg, (panel_x, panel_y + 10 + len(lines) * 22))
 
 def draw_lock_button(mouse_pos):
     # Place button at the bottom center
@@ -499,6 +523,9 @@ while running:
                             backend.send_bomb(click_row, click_col)
                         break
 
+        elif backend.GAME_STATE == "GAME_OVER":
+            pass
+
     # ------------------ DRAWING ------------------
     if backend.GAME_STATE == "SELECT_SHIPS":
         if backend.player_id == player1_id:
@@ -526,6 +553,9 @@ while running:
         draw_backend_ships()
         draw_status_panel()
         draw_marks()
+    
+    elif backend.GAME_STATE == "GAME_OVER":
+        draw_game_over(backend.winner)
 
     pygame.display.flip()
     clock.tick(60)
