@@ -8,32 +8,7 @@ import threading
 HOST = "0.0.0.0"
 PORT = 5000
 
-server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-server.bind((HOST, PORT))
-server.listen(2)
-
-print("Server waiting for players...")
-
 clients = []
-
-def send(conn, msg):
-    conn.sendall((json.dumps(msg) + "\n").encode())
-
-# Accept two players
-for i in range(2):
-    player_id = i+1
-    conn, addr = server.accept()
-    print(f"Player {player_id} connected from {addr}")
-    clients.append(conn)
-
-    # Send player ID to client
-    msg = {
-        "type": "player_id",
-        "player": player_id
-    }
-    send(conn,msg)
-
-print("Both players connected. Game starting.")
 
 # Game related memory
 ships = []
@@ -41,11 +16,13 @@ player1_locked = False
 player2_locked = False
 p1_game_state = None
 p2_game_state = None
-
 player_turn = 1
 
 GAME_OVER = False
 winner = None
+
+def send(conn, msg):
+    conn.sendall((json.dumps(msg) + "\n").encode())
 
 def handle_message(conn, player_index, message):
     opponent = clients[1 - player_index]
@@ -147,11 +124,41 @@ def handle_client(player_index):
 
     conn.close()
 
+def main():
+    global clients
 
-# Start a thread for each player
-threading.Thread(target=handle_client, args=(0,), daemon=True).start()
-threading.Thread(target=handle_client, args=(1,), daemon=True).start()
+    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server.bind((HOST, PORT))
+    server.listen(2)
 
-# Keep server alive
-while True:
-    pass
+    print("Server waiting for players...")
+
+    # Accept two players
+    for i in range(2):
+        player_id = i+1
+        conn, addr = server.accept()
+        print(f"Player {player_id} connected from {addr}")
+        clients.append(conn)
+
+        # Send player ID to client
+        msg = {
+            "type": "player_id",
+            "player": player_id
+        }
+        send(conn,msg)
+
+    # Start a thread for each player
+    threading.Thread(target=handle_client, args=(0,), daemon=True).start()
+    threading.Thread(target=handle_client, args=(1,), daemon=True).start()
+
+    start_msg = {
+        "type": "start_game"
+    }
+    for conn in clients:
+        send(conn,start_msg)
+
+    print("Both players connected. Game starting.")
+
+    # Keep server alive
+    while True:
+        pass

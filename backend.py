@@ -11,19 +11,7 @@ PORT = 5000
 BOARD_SIZE = 10
 
 ############################################################################# Server Communication #############################################################################
-# Connection to server
-sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-while True:
-    try:
-        sock.connect((SERVER_IP, PORT))
-        break
-    except ConnectionRefusedError:
-        print("Waiting for server...")
-        time.sleep(1)
-
-print("Connected to server")
-
-_recv_buffer = bytearray()
+sock = None
 
 # Networking Helpers
 def _send(msg):
@@ -52,10 +40,11 @@ your_turn = False
 winner = False
 ships_locked = False
 all_ships_locked = False
+opponent_ships_sunk = 0
 
 # Game state
-# SELECT_SHIPS -> PLACE_SHIPS -> WAITING_FOR_OPPONENT -> RUNNING_GAME
-GAME_STATE = "SELECT_SHIPS"
+# WAITING_FOR_PLAYERS_TO_CONNECT -> SELECT_SHIPS -> PLACE_SHIPS -> WAITING_FOR_OPPONENT -> RUNNING_GAME
+GAME_STATE = "WAITING_FOR_PLAYERS_TO_CONNECT"
 
 # Track shot outcomes (for UI & debugging)
 shots_received_hit = []
@@ -276,11 +265,13 @@ def all_ships_sunk():
     return True
 
 def sink_opp_ship(ship_coords):
-    global target_grid
+    global target_grid, opponent_ships_sunk
 
     for r, c in ship_coords:
         target_grid[r][c] = "D"
         print(f"Grid ({r},{c}) = {target_grid[r][c]}")
+
+    opponent_ships_sunk += 1
 
 def sink_own_ship(ship_index):
     global ships, grid
@@ -289,6 +280,18 @@ def sink_own_ship(ship_index):
     for r, c in ship:
         grid[r][c] = "D"
         print(f"Grid ({r},{c}) = {grid[r][c]}")
+
+def get_num_ships_sunk():
+    global ships
+
+    num_sunk = len(ships)
+    for ship in ships:
+        for r, c in ship:
+            if grid[r][c] != "D":
+                num_sunk = num_sunk - 1
+                break
+    
+    return num_sunk
 
 # Shot Handling (Local)
 def receive_shot(row, col):
@@ -402,7 +405,7 @@ def reset_game():
     ship_count = 0
     your_turn = False
 
-    GAME_STATE = "SELECT_SHIPS"
+    GAME_STATE = "WAITING_FOR_PLAYERS_TO_CONNECT"
     ships_locked = False
     all_ships_locked = False
 
@@ -420,6 +423,9 @@ def handle_server_message(message):
     if mtype == "player_id":
         player_id = message["player"]
         print(f"You are Player {player_id}")
+    
+    elif mtype == "start_game":
+        GAME_STATE = "SELECT_SHIPS"
 
     elif mtype == "set_ship_count":
         set_ship_count(message["count"])
@@ -461,14 +467,65 @@ def handle_server_message(message):
         print(f"Unknown Message: {message}")
 
 def listen_to_server():
+    buffer = ""
+    message = ""
     while True:
         try:
             data = sock.recv(4096).decode()
+            buffer += data
             if data:
                 message = json.loads(data)
-                handle_server_message(message)
+                
+                while "\n" in buffer:
+                    line, buffer = buffer.split("\n", 1)
+                    message = json.loads(line)
+                    handle_server_message(message)
         except:
             break
 
-print("BACKEND: Listening To Server...")
-threading.Thread(target=listen_to_server, daemon=True).start() # Thread that constantly listens for messages
+
+"""
+The following functions work as follows:
+    board.py runs init_network():
+        Try to connect to server
+            if the server is not started yet
+                start the server
+            else
+                connect to the server
+
+This allows board.py to be be the only file needing to be run
+The first client that runs it hosts the server and is player 1
+"""
+def start_local_server():
+    try:
+        import server
+        threading.Thread(target=server.main, daemon=True).start()
+    except OSError:
+        pass  # another instance started it first
+
+def connect_to_server():
+    global sock
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server_started = False
+
+    while True:
+        try:
+            sock.connect((SERVER_IP, PORT))
+            print("Connected to server.")
+            return sock
+
+        except ConnectionRefusedError:
+            if not server_started:
+                print("Server not running. Starting local server...")
+                start_local_server()
+                server_started = True
+                time.sleep(1)  # give server time to bind
+            else:
+                print("Waiting for server...")
+                time.sleep(1)
+
+def init_network():
+    global sock
+    sock = connect_to_server()
+    threading.Thread(target=listen_to_server, daemon=True).start()
+    print("Connected to server")

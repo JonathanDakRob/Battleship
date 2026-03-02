@@ -31,8 +31,8 @@ RESET_BUTTON_RECT = pygame.Rect(WINDOW_WIDTH // 2 + 10, WINDOW_HEIGHT - 50, 80, 
 
 
 # ------------------ INIT ------------------
-
-pygame.init()
+pygame.init() # Initialize pygame
+backend.init_network() # Initialize server
 screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
 pygame.display.set_caption("Two 10x10 Grids")
 clock = pygame.time.Clock()
@@ -382,6 +382,8 @@ def draw_status_panel():
     lines = [
         f"Player: {backend.player_id}",
         f"Your turn: {backend.your_turn}",
+        f"Ships sunk: {backend.get_num_ships_sunk()}/{len(backend.ships)}",
+        f"Enemy ships sunk: {backend.opponent_ships_sunk}/{len(backend.ships)}",
         f"Shots hit: {len(backend.shots_sent_hit)}",
         f"Shots missed: {len(backend.shots_sent_miss)}",
         f"Hits recv: {len(backend.shots_received_hit)}",
@@ -441,6 +443,9 @@ while running:
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             running = False
+        
+        if backend.GAME_STATE == "WAITING_FOR_PLAYERS_TO_CONNECT":
+            pass
 
         # ------------------ SHIP SELECTION STATE ------------------
         if backend.GAME_STATE == "SELECT_SHIPS":
@@ -527,6 +532,8 @@ while running:
             pass
 
     # ------------------ DRAWING ------------------
+    if backend.GAME_STATE == "WAITING_FOR_PLAYERS_TO_CONNECT":
+        draw_waiting_for_player(opponent_id, f"Waiting for player {opponent_id} to connect...")
     if backend.GAME_STATE == "SELECT_SHIPS":
         if backend.player_id == player1_id:
             draw_ship_selection()
