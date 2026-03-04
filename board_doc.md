@@ -91,6 +91,8 @@ All are of type `Tuple[int, int, int]` (RGB):
 Represents a single grid cell in either the top or bottom grid.
 
 ### Constructor
+
+```python
 Cell(rect: pygame.Rect, grid_id: int, row: int, col: int)
 
 ## `Ship`
