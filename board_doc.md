@@ -94,6 +94,7 @@ Represents a single grid cell in either the top or bottom grid.
 
 ```python
 Cell(rect: pygame.Rect, grid_id: int, row: int, col: int)
+```
 
 ## `Ship`
 
@@ -116,3 +117,4 @@ A `Ship` object:
 
 ```python
 Ship(length: int, x: int, y: int)
+```
