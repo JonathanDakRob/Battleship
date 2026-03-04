@@ -1,108 +1,116 @@
-Messages:
-	# Sent from the server to assign a player their ID
-	type: player_id
-		player: int
-		
-	# Sent to the server to update the game state of the sender
-	type: game_state
-		state: string (GAME_STATE)
-		sender: int (player_id)
-		
-	# Sent from the server to both players to set the ship count
-	type: set_ship_count
-		count: int
-		
-	# Sent from the server once both players have placed and locked in their ships
-	type: all_ships_locked
-		--No Attributes--
-		
-	# When sent to the server, it forwards it to the other player to represent a bomb being shot
-	type: bomb
-		row: int
-		col: int
-		
-	# Received after sending the "bomb" message. Lets user know if their bomb hit/miss, sunk a ship and/or ended the game
-	type: hit_status
-		row: int
-		col: int
-		status: bool
-		sunk: bool
-		all_sunk: bool
+# Battleship Frontend Documentation (`board.py`)
+## Overview
+This module implements the **pygame-based frontend** for a two-player Battleship game.  
+It handles:
 
-Global Variables (backend):
-	grid[]: int
-	target_grid[]: int
-	ship_count: int
-	# Ships stored as arrays of coordinate tuples
-	# For example: [[(0,0)], [(2,3),(2,4)], [(5,1),(6,1),(7,1)]]
-	ships[]: int[]
+- Window and grid rendering
+- Ship selection and placement
+- Mouse and keyboard interaction
+- UI state transitions
+- Communication triggers to the `backend` module
 
-	# Identity and match state
-	player_id: int
-	your_turn: bool
-	game_over: bool
-	ships_locked: bool
-	all_ships_locked: bool
+Dependencies:
+- `pygame`
+- `backend`
+- `sys`
+- `os`
 
-	# Game state
-	GAME_STATE: string
+---
 
-	# Track shots received and sent
-	shots_received_hit: (int,int)
-	shots_received_miss: (int,int)
-	shots_sent_hit: (int,int)
-	shots_sent_miss: (int,int)
+# Global Constants
+## Configuration Constants
 
-Server Functions (backend):
-	_send(message)
-		# Sends the passed json message to the server
-	handle_server_message(message)
-		# Called whenever a message is passed
-	listen_to_server()
-		# Always running on a separate thread and calls hander_server_message() whenever it receives a message
+| Name            | Type  | Description                                  |
+|-----------------|-------|----------------------------------------------|
+| `GRID_SIZE`     | `int` | Number of rows and columns per grid (10x10). |
+| `CELL_SIZE`     | `int` | Pixel size of each grid cell.                |
+| `LABEL_MARGIN`  | `int` | Spacing for coordinate labels.               |
+| `GRID_PADDING`  | `int` | Padding around grid edges.                   |
+| `WINDOW_WIDTH`  | `int` | Width of game window in pixels.              |
+| `WINDOW_HEIGHT` | `int` | Height of game window in pixels.             |
 
-Other Functions (backend):
-	in_bounds(row,col)
-		returns bool
-	compute_ship_cells(row,col,size,orientation):
-		returns cells
-	is_straight_and_contiguous(cells,size)
-		returns bool
-	can_place_ship(cells)
-		returns bool
-	remove_ship_from_grid(cells)
-		removes a ship from the grid
-	update_game_state(new_state)
-		updates the gamestate in the backend
-		sends "game_state" message to server
-		no return
-	update_ship_count(ship_count)
-		sends ship_count message to server
-	set_ship_count(count)
-		sets the global ship_count to count
-	place_ship(row,col,size,orientation)
-		places a ship on the grid
-		returns bool
-	submit_placement()
-		sends the ships to the server
-		sets global "ships_locked" to True
-	can_send_bomb(row,col)
-		returns bool
-	send_bomb(row,col)
-		sends "bomb" message with coordinates to server
-	receive_shot(row,col)
-		called when client receives a "bomb" message
-		sends the server a "hit_status" message
-	get_ship_index(row,col)
-		given coordinates, returns the index of the ship in the ships array (-1 if absent)
-		returns int
-	check_ship_sunk(ship_index)
-		returns bool
-	all_ships_sunk()
-		returns bool
-	ship_hit_counts()
-		gets the number of times each ship has been hit
-		returns int[]
-	reset_game()
-		resets game
-		returns bool
+---
+
+## Color Constants
+All are of type `Tuple[int, int, int]` (RGB):
+
+- `BG_COLOR`
+- `GRID_COLOR`
+- `HOVER_COLOR`
+- `RESET_COLOR`
+- `SHIP_COLOR`
+
+---
+
+## Ship UI Constants
+
+| Name              | Type  | Description                                    |
+|-------------------|-------|------------------------------------------------|
+| `SHIP_PADDING`    | `int` | Spacing for ship selection display.            |
+| `SHIP_BLOCK_SIZE` | `int` | Size of each ship block (same as `CELL_SIZE`). |
+
+---
+
+## Button Rectangles
+
+| Name                | Type          | Description                             |
+|---------------------|---------------|-----------------------------------------|
+| `LOCK_BUTTON_RECT`  | `pygame.Rect` | Rectangle defining LOCK button bounds.  |
+| `RESET_BUTTON_RECT` | `pygame.Rect` | Rectangle defining RESET button bounds. |
+
+---
+
+## Runtime Global Variables
+
+| Name                   | Type                | Description                                    |
+|------------------------|---------------------|------------------------------------------------|
+| `screen`               | `pygame.Surface`    | Main display surface.                          |
+| `clock`                | `pygame.time.Clock` | Used to cap frame rate.                        |
+| `ships`                | `List[Ship]`        | List of ship objects for placement.            |
+| `top_grid_y`           | `int`               | Y coordinate of top grid.                      |
+| `bottom_grid_y`        | `int`               | Y coordinate of bottom grid.                   |
+| `top_grid`             | `List[Cell]`        | Cells for opponent board.                      |
+| `bottom_grid`          | `List[Cell]`        | Cells for player board.                        |
+| `all_cells`            | `List[Cell]`        | Combined list of both grids.                   |
+| `player1_id`           | `int`               | ID for player 1.                               |
+| `player2_id`           | `int`               | ID for player 2.                               |
+| `opponent_id`          | `int`               | ID of opponent player.                         |
+| `running`              | `bool`              | Main loop control flag.                        |
+| `ships_selected`       | `bool`              | Tracks whether ship count is chosen.           |
+| `started_running_game` | `bool`              | Ensures turn initialization only happens once. |
+
+---
+
+# Classes
+
+---
+
+## `Cell`
+
+### Description
+Represents a single grid cell in either the top or bottom grid.
+
+### Constructor
+Cell(rect: pygame.Rect, grid_id: int, row: int, col: int)
+
+## `Ship`
+
+### Description
+Represents a draggable ship during the ship placement phase.
+
+A `Ship` object:
+
+- Tracks its pixel position on screen
+- Tracks its grid position in the backend
+- Supports dragging with the mouse
+- Supports rotation using the `R` key
+- Snaps to grid cells when dropped
+- Validates placement using backend logic
+- Updates the backend grid when placed
+
+---
+
+### Constructor
+
+```python
+Ship(length: int, x: int, y: int)
