@@ -1,4 +1,4 @@
-# Networked Battleship (Local Multiplayer Prototype)
+# Networked Battleship (Local Multiplayer Game)
 
 ## Overview
 
