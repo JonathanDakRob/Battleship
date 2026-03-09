@@ -20,7 +20,7 @@ WINDOW_HEIGHT = (GRID_SIZE * CELL_SIZE * 2) + 180
 BG_COLOR = (30, 30, 30)
 GRID_COLOR = (200, 200, 200)
 HOVER_COLOR = (100, 180, 255)
-RESET_COLOR = (200, 50, 50)
+
 
 SHIP_COLOR = (180, 180, 180)
 SHIP_PADDING = 20
@@ -29,12 +29,16 @@ SHIP_BLOCK_SIZE = CELL_SIZE
 LOCK_BUTTON_RECT = pygame.Rect(WINDOW_WIDTH // 2 - 90, WINDOW_HEIGHT - 50, 80, 30)
 RESET_BUTTON_RECT = pygame.Rect(WINDOW_WIDTH // 2 + 10, WINDOW_HEIGHT - 50, 80, 30)
 
+SINGLE_PLAYER_RECT = pygame.Rect(WINDOW_WIDTH//2 - 150, WINDOW_HEIGHT//2 - 80, 300, 60)
+MULTI_PLAYER_RECT = pygame.Rect(WINDOW_WIDTH//2 - 150, WINDOW_HEIGHT//2 + 20, 300, 60)
+
+BACK_RECT = pygame.Rect(WINDOW_WIDTH//2 - 200//2, WINDOW_HEIGHT - 80, 200, 60)
+
 
 # ------------------ INIT ------------------
 pygame.init() # Initialize pygame
-backend.init_network() # Initialize server
 screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
-pygame.display.set_caption("Two 10x10 Grids")
+pygame.display.set_caption("Battleship Game")
 clock = pygame.time.Clock()
 
 # ------------------ CELL CLASS ------------------
@@ -160,24 +164,9 @@ class Ship:
                 self.x = event.pos[0] + self.offset_x
                 self.y = event.pos[1] + self.offset_y
 
-# ------------------ SHIP SELECTION ------------------
-def draw_ship_selection():
-    screen.fill(BG_COLOR)
 
-    font = pygame.font.SysFont(None, 32)
-    small_font = pygame.font.SysFont(None, 24)
-
-    title_text = font.render("Select Number of Ships (1 - 5)", True, (255, 255, 255))
-    instruction_text = small_font.render("Press a number key 1, 2, 3, 4, or 5", True, (200, 200, 200))
-
-    screen.blit(title_text, (WINDOW_WIDTH // 2 - title_text.get_width() // 2, WINDOW_HEIGHT // 3))
-    screen.blit(instruction_text, (WINDOW_WIDTH // 2 - instruction_text.get_width() // 2, WINDOW_HEIGHT // 2))
-
-    #pygame.display.flip()
-
-# ------------------ SHIP PLACEMENT ------------------
+# ------------------ SHIP CREATION ------------------
 ships = []
-
 def create_ships(num_ships):
     global ships
     ships.clear()
@@ -191,13 +180,84 @@ def create_ships(num_ships):
 
         ships_start_y += (ship_length * CELL_SIZE) + 10
 
-def draw_waiting_for_player(number, message):
+'''
+PyGame Drawing Functions:
+The following functions use PyGame to draw the frontend/UI of the game.
+They are called during the main gameplay loop and draw things depending on the Game State.
+'''
+def draw_main_menu(mouse_pos):
+    font = pygame.font.SysFont(None, 60)
+    button_font = pygame.font.SysFont(None, 40)
+
+    # single_rect = pygame.Rect(WINDOW_WIDTH//2 - 150, WINDOW_HEIGHT//2 - 80, 300, 60)
+    # multi_rect = pygame.Rect(WINDOW_WIDTH//2 - 150, WINDOW_HEIGHT//2 + 20, 300, 60)
+
+    sp_color = (70,130,180)
+    mp_color = (70,130,180)
+
+    if SINGLE_PLAYER_RECT.collidepoint(mouse_pos):
+        sp_color = (100,160,210)
+        pygame.draw.rect(screen, (255, 255, 255), SINGLE_PLAYER_RECT.inflate(-6, -6), 2)
+
+    if MULTI_PLAYER_RECT.collidepoint(mouse_pos):
+        mp_color = (100,160,210)
+        pygame.draw.rect(screen, (255, 255, 255), MULTI_PLAYER_RECT.inflate(-6, -6), 2)
+
+    screen.fill(BG_COLOR)
+
+    title = font.render("Battleship", True, (255,255,255))
+    screen.blit(title, (WINDOW_WIDTH//2 - title.get_width()//2, WINDOW_HEIGHT//4))
+
+    pygame.draw.rect(screen, sp_color, SINGLE_PLAYER_RECT)
+    pygame.draw.rect(screen, mp_color, MULTI_PLAYER_RECT)
+
+    single_text = button_font.render("Single Player", True, (255,255,255))
+    multi_text = button_font.render("Multi-Player", True, (255,255,255))
+
+    screen.blit(single_text, (SINGLE_PLAYER_RECT.centerx - single_text.get_width()//2,
+                                SINGLE_PLAYER_RECT.centery - single_text.get_height()//2))
+
+    screen.blit(multi_text, (MULTI_PLAYER_RECT.centerx - multi_text.get_width()//2,
+                                MULTI_PLAYER_RECT.centery - multi_text.get_height()//2))
+    
+    return SINGLE_PLAYER_RECT, MULTI_PLAYER_RECT
+
+def draw_message(message):
+    screen.fill(BG_COLOR)
+    font = pygame.font.SysFont(None, 30)
+    title = font.render(message,True,(255,255,255))
+
+    screen.blit(
+        title,
+        (WINDOW_WIDTH // 2 - title.get_width() // 2,
+         WINDOW_HEIGHT // 2 - title.get_height())
+    )
+
+def draw_back_button(mouse_pos):
+    font = pygame.font.SysFont(None, 40)
+    color = (180, 50, 50)
+
+    # Draw button
+    if BACK_RECT.collidepoint(mouse_pos):
+        color = (230,100,100)
+        pygame.draw.rect(screen, (255, 255, 255), BACK_RECT.inflate(4, 4), 2, border_radius=8)
+    else:
+        pygame.draw.rect(screen, color, BACK_RECT, border_radius=8)
+
+    # Draw text
+    text = font.render("Back", True, (255, 255, 255))
+    screen.blit(text, (BACK_RECT.centerx - text.get_width()//2, BACK_RECT.centery - text.get_height()//2))
+
+def draw_waiting_for_player(message, number=0):
     screen.fill(BG_COLOR)
 
     font = pygame.font.SysFont(None, 30)
     small_font = pygame.font.SysFont(None, 20)
-
-    title = font.render(f"Waiting for Player {number}...", True, (255, 255, 255))
+    
+    if number == 0:
+        title = font.render(f"Waiting for Other Player...", True, (255, 255, 255))
+    else:
+        title = font.render(f"Waiting for Player {number}...", True, (255, 255, 255))
     subtitle = small_font.render(message, True, (180, 180, 180))
 
     screen.blit(
@@ -211,6 +271,20 @@ def draw_waiting_for_player(number, message):
         (WINDOW_WIDTH // 2 - subtitle.get_width() // 2,
          WINDOW_HEIGHT // 2 + 10)
     )
+
+def draw_ship_selection():
+    screen.fill(BG_COLOR)
+
+    font = pygame.font.SysFont(None, 32)
+    small_font = pygame.font.SysFont(None, 24)
+
+    title_text = font.render("Select Number of Ships (1 - 5)", True, (255, 255, 255))
+    instruction_text = small_font.render("Press a number key 1, 2, 3, 4, or 5", True, (200, 200, 200))
+
+    screen.blit(title_text, (WINDOW_WIDTH // 2 - title_text.get_width() // 2, WINDOW_HEIGHT // 3))
+    screen.blit(instruction_text, (WINDOW_WIDTH // 2 - instruction_text.get_width() // 2, WINDOW_HEIGHT // 2))
+
+    pygame.display.flip()
 
 def draw_game_over(winner):
     screen.fill(BG_COLOR)
@@ -316,11 +390,23 @@ def draw_coordinates(start_x, start_y):
 
 # ------------------ DRAW LOCK AND RESET BUTTON ------------------
 def draw_control_buttons(mouse_pos):
+    lock_color = (50, 200, 50)
+    reset_color = (200, 50, 50)
+
     # Lock Button
-    pygame.draw.rect(screen, (50, 200, 50), LOCK_BUTTON_RECT)
-    
+    if LOCK_BUTTON_RECT.collidepoint(mouse_pos):
+        lock_color = (70, 230, 70)  
+        pygame.draw.rect(screen, (255, 255, 255), LOCK_BUTTON_RECT.inflate(4, 4), 2)
+    else:
+        pygame.draw.rect(screen, lock_color, LOCK_BUTTON_RECT)
+
     # Reset Button
-    pygame.draw.rect(screen, RESET_COLOR, RESET_BUTTON_RECT)
+    if RESET_BUTTON_RECT.collidepoint(mouse_pos):
+        reset_color = (220, 80, 70)
+        pygame.draw.rect(screen, (255, 255, 255), RESET_BUTTON_RECT.inflate(4, 4), 2)
+    else:
+        pygame.draw.rect(screen, reset_color, RESET_BUTTON_RECT)
+ 
     
     font = pygame.font.SysFont(None, 18)
     lock_text = font.render("LOCK", True, (255, 255, 255))
@@ -405,11 +491,10 @@ def draw_lock_button(mouse_pos):
     button_rect = pygame.Rect(WINDOW_WIDTH // 2 - 70, WINDOW_HEIGHT - 50, 140, 35)
     if button_rect.collidepoint(mouse_pos):
         color = (70, 230, 70)  
-       
         pygame.draw.rect(screen, (255, 255, 255), button_rect.inflate(4, 4), 2)
     else:
         color = (50, 200, 50)  
-    pygame.draw.rect(screen, (50, 200, 50), button_rect)
+    pygame.draw.rect(screen, color, button_rect)
     
     font = pygame.font.SysFont(None, 24)
     text = font.render("LOCK SHIPS", True, (255, 255, 255))
@@ -438,17 +523,27 @@ started_running_game = False
 while running:
     mouse_pos = pygame.mouse.get_pos()
 
-    #print(f"GAME STATE: {backend.GAME_STATE}")
-
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             running = False
         
-        if backend.GAME_STATE == "WAITING_FOR_PLAYERS_TO_CONNECT":
+        if backend.GAME_STATE == "MAIN_MENU":
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                if SINGLE_PLAYER_RECT.collidepoint(event.pos):
+                    backend.update_game_state("SINGLE_PLAYER")
+                    backend.update_game_mode(1)
+
+                if MULTI_PLAYER_RECT.collidepoint(event.pos):
+                    backend.update_game_mode(2)
+                    backend.init_network() # Initialize server
+                    backend.update_game_state("WAITING_FOR_PLAYERS_TO_CONNECT")
+
+         # ------------------ WAITING FOR PLAYERS TO ONNECT STATE ------------------
+        elif backend.GAME_STATE == "WAITING_FOR_PLAYERS_TO_CONNECT":
             pass
 
         # ------------------ SHIP SELECTION STATE ------------------
-        if backend.GAME_STATE == "SELECT_SHIPS":
+        elif backend.GAME_STATE == "SELECT_SHIPS":
             if backend.player_id == player1_id:
                 if event.type == pygame.KEYDOWN:
                     if event.key in [
@@ -531,23 +626,31 @@ while running:
         elif backend.GAME_STATE == "GAME_OVER":
             pass
 
+        elif backend.GAME_STATE == "SINGLE_PLAYER":
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                if BACK_RECT.collidepoint(mouse_pos):
+                    backend.update_game_state("MAIN_MENU")
+
     # ------------------ DRAWING ------------------
-    if backend.GAME_STATE == "WAITING_FOR_PLAYERS_TO_CONNECT":
-        draw_waiting_for_player(opponent_id, f"Waiting for player {opponent_id} to connect...")
-    if backend.GAME_STATE == "SELECT_SHIPS":
+    if backend.GAME_STATE == "MAIN_MENU":
+        draw_main_menu(mouse_pos)
+
+    elif backend.GAME_STATE == "WAITING_FOR_PLAYERS_TO_CONNECT":
+        draw_waiting_for_player(f"Waiting for player opponent to connect...", opponent_id)
+    
+    elif backend.GAME_STATE == "SELECT_SHIPS":
         if backend.player_id == player1_id:
             draw_ship_selection()
         if backend.player_id == player2_id:
-            draw_waiting_for_player(player1_id, f"Player {player1_id} will select 1-5 ships")
+            draw_waiting_for_player(f"Player {player1_id} will select 1-5 ships", player1_id)
     
     elif backend.GAME_STATE == "PLACE_SHIPS":
         draw_ship_placement()
         draw_coordinates(GRID_PADDING, GRID_PADDING)
         draw_control_buttons(mouse_pos)
-        
     
     elif backend.GAME_STATE == "WAITING_FOR_OPPONENT":
-        draw_waiting_for_player(opponent_id, f"Player {opponent_id} is still placing their ships")
+        draw_waiting_for_player(f"Player {opponent_id} is still placing their ships", opponent_id)
 
     elif backend.GAME_STATE == "RUNNING_GAME":
         screen.fill(BG_COLOR)
@@ -563,6 +666,10 @@ while running:
     
     elif backend.GAME_STATE == "GAME_OVER":
         draw_game_over(backend.winner)
+    
+    elif backend.GAME_STATE == "SINGLE_PLAYER":
+        draw_message("Single player construction in progress")
+        draw_back_button(mouse_pos)
 
     pygame.display.flip()
     clock.tick(60)

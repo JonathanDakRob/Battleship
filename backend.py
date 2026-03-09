@@ -10,13 +10,6 @@ SERVER_IP = "127.0.0.1"
 PORT = 5000
 BOARD_SIZE = 10
 
-############################################################################# Server Communication #############################################################################
-sock = None
-
-# Networking Helpers
-def _send(msg):
-    sock.sendall((json.dumps(msg)+ "\n").encode())
-
 ############################################################################# Memory #############################################################################
 # Local Game State
 
@@ -42,9 +35,14 @@ ships_locked = False
 all_ships_locked = False
 opponent_ships_sunk = 0
 
+# Game mode: Single or Multi-player
+# Single Player: 1
+# Multi-Playter: 2
+GAME_MODE = 0
+
 # Game state
 # WAITING_FOR_PLAYERS_TO_CONNECT -> SELECT_SHIPS -> PLACE_SHIPS -> WAITING_FOR_OPPONENT -> RUNNING_GAME
-GAME_STATE = "WAITING_FOR_PLAYERS_TO_CONNECT"
+GAME_STATE = "MAIN_MENU"
 
 # Track shot outcomes (for UI & debugging)
 shots_received_hit = []
@@ -52,8 +50,36 @@ shots_received_miss = []
 shots_sent_hit = []
 shots_sent_miss = []
 
-# Prevent firing multiple shots before the server replies with hit_status
-# pending_shot = False # Commented out for simplicity. Keeping things simple and clean for now
+############################################################################# Server Communication #############################################################################
+sock = None
+
+# Networking Helpers
+def _send(msg):
+    if GAME_MODE == 2:
+        sock.sendall((json.dumps(msg)+ "\n").encode())
+        print(f"{msg["type"]} message sent")
+    else:
+        print("Cannot send message to server. Game in Single Player Mode")
+
+############################################################################# Variable Updates #############################################################################
+def update_game_mode(mode):
+    global GAME_MODE
+    if mode in range(1,3):
+        GAME_MODE = mode
+    else:
+        print("INVALID GAME MODE")
+
+def update_game_state(new_state):
+    global GAME_STATE
+    GAME_STATE = new_state
+
+    # This keeps both clients stage-synced during development.
+    message = {
+        "type": "game_state",
+        "state": GAME_STATE,
+        "sender": player_id # Sender
+    }
+    _send(message)
 
 ############################################################################# Pre-game Functions #############################################################################
 # Utility Functions
@@ -104,18 +130,6 @@ def remove_ship_from_grid(cells):
     for r, c in cells:
         if in_bounds(r, c) and grid[r][c] == "S":
             grid[r][c] = "."
-
-def update_game_state(new_state):
-    global GAME_STATE
-    GAME_STATE = new_state
-
-    # This keeps both clients stage-synced during development.
-    message = {
-        "type": "game_state",
-        "state": GAME_STATE,
-        "sender": player_id # Sender
-    }
-    _send(message)
 
 def update_ship_count(count):
     # Player 1 selects ship count; server forwards to both clients.
