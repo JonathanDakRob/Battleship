@@ -81,7 +81,7 @@ class Ship:
         self.dragging = False
         self.offset_x = 0
         self.offset_y = 0
-        self.placed= False # Visual feedback: turns green when successfully placed
+        self.placed = False # Visual feedback: turns green when successfully placed
         self.grid_row = None
         self.grid_col = None
 
@@ -93,14 +93,12 @@ class Ship:
             curr_y = self.y + (i * CELL_SIZE if self.orientation == "V" else 0)
             rects.append(pygame.Rect(curr_x, curr_y, CELL_SIZE, CELL_SIZE))
         return rects
-            
 
     def draw(self, surface):
         for rect in self.get_rects():
             color = (0, 255, 0) if self.placed else SHIP_COLOR
             pygame.draw.rect(surface, color, rect)
             pygame.draw.rect(surface, (50, 50, 50), rect, 2)
-            
 
     def handle_event(self, event): #handles events related to dragging and placing a ship on a grid
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
@@ -326,7 +324,6 @@ def draw_ship_placement():
                 CELL_SIZE
             )
             pygame.draw.rect(screen, GRID_COLOR, rect, 2)
-
    
     active_ship = None
     for ship in ships:
@@ -361,12 +358,6 @@ top_grid = create_grid(0, GRID_PADDING, top_grid_y)
 bottom_grid = create_grid(1, GRID_PADDING, bottom_grid_y)
 
 all_cells = top_grid + bottom_grid
-
-# ------------------ CONFIG UPDATES ------------------
-# Redundancy? Already exist close to the beginning of board.py.
-# LABEL_MARGIN = 20  # Space for letters and numbers
-# Adjust GRID_PADDING if needed to ensure labels fit on screen
-# GRID_PADDING = 40
 
 # ------------------ COORDINATE DRAWING ------------------
 def draw_coordinates(start_x, start_y):
@@ -513,13 +504,9 @@ else:
 
 running = True
 ships_selected = False # Used to move on from ship selection stage
+started_running_game = False # True if the game has fully started
 
-print(f"BOARD: You Are Player {backend.player_id}")
-
-# Optional: give Player 1 the first turn when RUNNING_GAME begins
-# This is a simple local rule; can be replaced with server-authoritative turns.
-started_running_game = False
-
+# ------------------------------------ GAMEPLAY LOOP ------------------------------------
 while running:
     mouse_pos = pygame.mouse.get_pos()
 
@@ -572,7 +559,7 @@ while running:
         # ------------------ SHIP PLACING STATE ------------------
         elif backend.GAME_STATE == "PLACE_SHIPS":
             for ship in ships:
-                ship.handle_event(event)
+                ship.handle_event(event)    
 
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 if RESET_BUTTON_RECT.collidepoint(event.pos):
@@ -580,9 +567,7 @@ while running:
                     # Clear the backend grid
                     backend.grid = [["." for _ in range(GRID_SIZE)] for _ in range(GRID_SIZE)]
                     for ship in ships:
-                        ship.placed = False
-                        ship.x, ship.y = ship.orig_x, ship.orig_y # Back to tray
-                        ship.grid_row, ship.grid_col = None, None
+                        create_ships(len(ships))
 
                 elif LOCK_BUTTON_RECT.collidepoint(event.pos):
                     all_valid = all(s.placed for s in ships)
