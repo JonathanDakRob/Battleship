@@ -399,12 +399,12 @@ def handle_game_over(winner_id):
         print("GAME OVER! YOU WIN!")
     else:
         winner = False
-        print("GAME OVER! YOU LOSE.")    
+        print("GAME OVER! YOU LOSE.")
 
 def reset_game():
-    global grid, target_grid, ships
+    global grid, target_grid, ships, player_id, winner, opponent_ships_sunk
     global shots_received_hit, shots_received_miss, shots_sent_hit, shots_sent_miss
-    global ship_count, your_turn, GAME_STATE
+    global ship_count, your_turn, GAME_STATE, GAME_MODE
     global ships_locked, all_ships_locked
 
     grid = [["." for _ in range(BOARD_SIZE)] for _ in range(BOARD_SIZE)]
@@ -415,11 +415,15 @@ def reset_game():
     shots_received_miss = []
     shots_sent_hit = []
     shots_sent_miss = []
+    player_id = None
+    winner = False
+    opponent_ships_sunk = 0
 
     ship_count = 0
     your_turn = False
 
-    GAME_STATE = "WAITING_FOR_PLAYERS_TO_CONNECT"
+    GAME_MODE = 0
+    GAME_STATE = "MAIN_MENU"
     ships_locked = False
     all_ships_locked = False
 
@@ -543,3 +547,7 @@ def init_network():
     sock = connect_to_server()
     threading.Thread(target=listen_to_server, daemon=True).start()
     print("Connected to server")
+
+def disconnect_from_server():
+    global sock
+    sock.close()

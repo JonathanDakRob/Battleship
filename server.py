@@ -94,6 +94,7 @@ def handle_message(conn, player_index, message):
 
 
 def handle_client(player_index):
+    global clients
     buffer = ""
     message = ""
 
@@ -103,6 +104,9 @@ def handle_client(player_index):
     global GAME_OVER, p1_game_state, p2_game_state, ships, player1_locked, player2_locked
 
     while True:
+        if len(clients) <= 0:
+            break
+
         try:
             data = conn.recv(4096).decode()
             if not data:
@@ -120,6 +124,7 @@ def handle_client(player_index):
 
         except Exception as e:
             print("SERVER: Client disconnected:", e)
+            clients.remove(conn)
             break
 
     conn.close()
@@ -161,4 +166,6 @@ def main():
 
     # Keep server alive
     while True:
+        if len(clients) < 2:
+            server.close()
         pass

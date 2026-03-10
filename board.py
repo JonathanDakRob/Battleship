@@ -32,7 +32,12 @@ RESET_BUTTON_RECT = pygame.Rect(WINDOW_WIDTH // 2 + 10, WINDOW_HEIGHT - 50, 80, 
 SINGLE_PLAYER_RECT = pygame.Rect(WINDOW_WIDTH//2 - 150, WINDOW_HEIGHT//2 - 80, 300, 60)
 MULTI_PLAYER_RECT = pygame.Rect(WINDOW_WIDTH//2 - 150, WINDOW_HEIGHT//2 + 20, 300, 60)
 
-BACK_RECT = pygame.Rect(WINDOW_WIDTH//2 - 200//2, WINDOW_HEIGHT - 80, 200, 60)
+button_rect_width = 80
+button_rect_height = 30
+BUTTON_RECT = pygame.Rect(WINDOW_WIDTH//2 - button_rect_width//2,
+                          WINDOW_HEIGHT - (button_rect_height + 20),
+                          button_rect_width,
+                          button_rect_height)
 
 
 # ------------------ INIT ------------------
@@ -231,20 +236,19 @@ def draw_message(message):
          WINDOW_HEIGHT // 2 - title.get_height())
     )
 
-def draw_back_button(mouse_pos):
-    font = pygame.font.SysFont(None, 40)
-    color = (180, 50, 50)
+def draw_button(mouse_pos, text="Back", color=(180, 50, 50), border_rad=0):
+    font = pygame.font.SysFont(None, 20)
 
     # Draw button
-    if BACK_RECT.collidepoint(mouse_pos):
+    if BUTTON_RECT.collidepoint(mouse_pos):
         color = (230,100,100)
-        pygame.draw.rect(screen, (255, 255, 255), BACK_RECT.inflate(4, 4), 2, border_radius=8)
+        pygame.draw.rect(screen, (255, 255, 255), BUTTON_RECT.inflate(4, 4), 2, border_radius=border_rad)
     else:
-        pygame.draw.rect(screen, color, BACK_RECT, border_radius=8)
+        pygame.draw.rect(screen, color, BUTTON_RECT, border_radius=border_rad)
 
     # Draw text
-    text = font.render("Back", True, (255, 255, 255))
-    screen.blit(text, (BACK_RECT.centerx - text.get_width()//2, BACK_RECT.centery - text.get_height()//2))
+    text = font.render(text, True, (255, 255, 255))
+    screen.blit(text, (BUTTON_RECT.centerx - text.get_width()//2, BUTTON_RECT.centery - text.get_height()//2))
 
 def draw_waiting_for_player(message, number=0):
     screen.fill(BG_COLOR)
@@ -609,11 +613,13 @@ while running:
                         break
 
         elif backend.GAME_STATE == "GAME_OVER":
-            pass
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                if BUTTON_RECT.collidepoint(mouse_pos):
+                    backend.reset_game()
 
         elif backend.GAME_STATE == "SINGLE_PLAYER":
             if event.type == pygame.MOUSEBUTTONDOWN:
-                if BACK_RECT.collidepoint(mouse_pos):
+                if BUTTON_RECT.collidepoint(mouse_pos):
                     backend.update_game_state("MAIN_MENU")
 
     # ------------------ DRAWING ------------------
@@ -651,10 +657,12 @@ while running:
     
     elif backend.GAME_STATE == "GAME_OVER":
         draw_game_over(backend.winner)
+        draw_button(mouse_pos, color=(0,255,0), text="Main Menu")
+        backend.disconnect_from_server()
     
     elif backend.GAME_STATE == "SINGLE_PLAYER":
         draw_message("Single player construction in progress")
-        draw_back_button(mouse_pos)
+        draw_button(mouse_pos)
 
     pygame.display.flip()
     clock.tick(60)
