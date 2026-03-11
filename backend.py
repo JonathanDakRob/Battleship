@@ -61,6 +61,10 @@ class ai_opponent:
         self.difficulty = None
         self.ai_turn = False
 
+    # Places 'ship_count' number of ships
+    def ai_generate_ships(self, ship_count):
+        pass
+
     # When it is the AI's turn, it will generate a shot
     def ai_generate_shot(self):
         if self.difficulty == "easy":
@@ -72,7 +76,7 @@ class ai_opponent:
             pass
     
     # Handling the reception of a shot from player
-    def ai_receive_shot():
+    def ai_receive_shot(self):
         return
 
 ############################################################################# Server Communication #############################################################################
