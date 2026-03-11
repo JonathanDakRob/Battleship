@@ -183,6 +183,13 @@ def create_ships(num_ships):
 
         ships_start_y += (ship_length * CELL_SIZE) + 10
 
+def reset_local_ui_state():
+    global ships_selected, started_running_game, multi_bomb_mode, ships
+    ships_selected = False
+    started_running_game = False
+    multi_bomb_mode = False
+    ships.clear()
+
 '''
 PyGame Drawing Functions:
 The following functions use PyGame to draw the frontend/UI of the game.
@@ -453,6 +460,25 @@ def draw_marks():
             draw_mark_cell(backend.target_grid[r][c], top_grid_y, r, c)  # Your shots
             draw_mark_cell(backend.grid[r][c], bottom_grid_y, r, c)  # Opponent shots
 
+def draw_multi_bomb_preview(mouse_pos):
+    # When multi-bomb mode is armed, show the player
+    # which 3x3 area will be attacked beofre they click.
+    if not multi_bomb_mode:
+        return
+
+    for cell in top_grid:
+        if cell.rect.collidepoint(mouse_pos):
+            center_row, center_col = cell.get_coords()
+            cells = backend.compute_multi_bomb_cells(center_row, center_col)
+
+            # Highlight every valid cell in the 3x3 area.
+            for r, c in cells:
+                x = GRID_PADDING + c * CELL_SIZE
+                y = top_grid_y + r * CELL_SIZE
+                rect = pygame.Rect(x, y, CELL_SIZE, CELL_SIZE)
+                pygame.draw.rect(screen, (240, 220, 80), rect, 3)
+                break
+
 def draw_status_panel():
     # Simple UI panel to explain state during demo
     panel_x = GRID_PADDING + GRID_SIZE * CELL_SIZE + 15
@@ -463,6 +489,8 @@ def draw_status_panel():
     lines = [
         f"Player: {backend.player_id}",
         f"Your turn: {backend.your_turn}",
+        f"Multi-bomb: {'ARMED' if multi_bomb_mode else 'DISABLED'}",
+        f"Press M: Toggle",
         f"Ships sunk: {backend.get_num_ships_sunk()}/{len(backend.ships)}",
         f"Enemy ships sunk: {backend.opponent_ships_sunk}/{len(backend.ships)}",
         f"Shots hit: {len(backend.shots_sent_hit)}",
@@ -504,6 +532,7 @@ player2_id = 2
 running = True
 ships_selected = False # Used to move on from ship selection stage
 started_running_game = False # True if the game has fully started
+multi_bomb_mode = False
 game_mode = 0
 
 # ------------------------------------ GAMEPLAY LOOP ------------------------------------
@@ -602,6 +631,12 @@ while running:
                 # This gives Player 1 the first move without needing server logic yet.
                 backend.your_turn = (backend.player_id == player1_id)
 
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_m:
+                    # Press M to toggle multi-bomb mode on or off.
+                    multi_bomb_mode = not multi_bomb_mode
+                    print(f"MULTI-BOMB MODE: {multi_bomb_mode}")
+
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 # Gate input so only the active player can fire
                 #if backend.your_turn:
@@ -614,8 +649,18 @@ while running:
 
                         # Can only send bomb if it is your turn
                         if backend.your_turn:
-                            print(f"FRONTEND: Sending Bomb to {click_row, click_col}")
-                            backend.send_bomb(click_row, click_col)
+                            if multi_bomb_mode:
+                                # If multi-bomb mode is armed, send one 3x3 attack
+                                # instead of a normal single-cell bomb.
+                                print(f"FRONTEND: Sending MULTI-BOMB to {click_row, click_col}")
+                                backend.send_multi_bomb(click_row, click_col)
+
+                                # Turn off the mode after one use so the player must
+                                # intentionally arm it again next time.
+                                multi_bomb_mode = False
+                            else:
+                                print(f"FRONTEND: Sending Bomb to {click_row, click_col}")
+                                backend.send_bomb(click_row, click_col)
                         break
 
         # ------------------ GAME OVER STATE ------------------
@@ -664,6 +709,7 @@ while running:
         
         # Draw backend ships and hit/miss overlays on bottom grid
         draw_backend_ships()
+        draw_multi_bomb_preview(mouse_pos)
         draw_status_panel()
         draw_marks()
     

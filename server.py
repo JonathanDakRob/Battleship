@@ -72,7 +72,31 @@ def handle_message(conn, player_index, message):
             send(opponent,changeTurn_msg)
             send(conn,changeTurn_msg)
         send(opponent,message)
-    
+
+    elif message["type"] == "multi_bomb":
+        # The attacker already computed the 3x3 target area in backend.py.
+        # The server's job is just to forward that attack request to the opponent.
+        print(f"SERVER: Player {player_index + 1} used multi_bomb")
+        send(opponent,message)
+
+    elif message["type"] == "multi_bomb_result":
+        # The defender sends back one combined result for the whole 3x3 attack.
+        # If all ships are sunk after this attack, the game is now over.
+        if message["all_sunk"] == True:
+            GAME_OVER = True
+
+        # Send the full multi-bomb result back to the attacking player
+        # so their board can update all hit/miss cells at once.
+        send(opponent,message)
+
+        # Multi-bomb always consumes the turn, so after it finishes,
+        # both clients receive a change_turn message.
+        changeTurn_msg = {
+            "type": "change_turn"
+        }
+        send(opponent,changeTurn_msg)
+        send(conn, changeTurn_msg)
+
     elif message["type"] == "game_over":
         global winner
         GAME_OVER = True
