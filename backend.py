@@ -769,3 +769,4 @@ def disconnect_from_server():
         import server
         server.running = False
         server_host = False
+    server_started = False
