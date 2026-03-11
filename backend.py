@@ -55,16 +55,29 @@ shots_sent_miss = []
 
 # Coming Soon: AI Components
 
+class ai_opponent:
+    def __init__(self):
+        self.ai_ships = None
+        self.difficulty = None
+        self.ai_turn = False
 
+    # Places 'ship_count' number of ships
+    def ai_generate_ships(self, ship_count):
+        pass
 
-
-
-
-
-
-
-
-
+    # When it is the AI's turn, it will generate a shot
+    def ai_generate_shot(self):
+        if self.difficulty == "easy":
+            pass
+        elif self.difficulty == "medium":
+            pass
+        elif self.difficulty == "hard":
+            global ships
+            pass
+    
+    # Handling the reception of a shot from player
+    def ai_receive_shot(self):
+        return
 
 ############################################################################# Server Communication #############################################################################
 sock = None
