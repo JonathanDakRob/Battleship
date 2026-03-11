@@ -539,6 +539,7 @@ def start_local_server():
         threading.Thread(target=server.main, daemon=True).start()
         server_host = True
     except OSError:
+        print("BACKEND: Another server instance started")
         pass  # another instance started it first
 
 server_started = False
@@ -557,8 +558,8 @@ def connect_to_server():
             if not server_started:
                 print("Server not running. Starting local server...")
                 start_local_server()
+                time.sleep(1) # Giving server time to bind
                 server_started = True
-                time.sleep(1)  # give server time to bind
             else:
                 print("Waiting for server...")
                 time.sleep(1)

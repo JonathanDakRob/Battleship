@@ -500,25 +500,27 @@ def draw_lock_button(mouse_pos):
 # Please use these player_id variables when printing sending/printing things like: "Waiting For Player X"
 player1_id = 1 
 player2_id = 2
-opponent_id = -1
-if backend.player_id == 1:
-    opponent_id = 2
-else:
-    opponent_id = 1
 
 running = True
 ships_selected = False # Used to move on from ship selection stage
 started_running_game = False # True if the game has fully started
+game_mode = 0
 
 # ------------------------------------ GAMEPLAY LOOP ------------------------------------
 while running:
     mouse_pos = pygame.mouse.get_pos()
 
+    if backend.player_id != None:
+        opponent_id = (backend.player_id % 2) + 1
+
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             running = False
         
-        if backend.GAME_STATE == "MAIN_MENU":
+        game_state = backend.GAME_STATE
+        
+        # ------------------ MAIN MENU STATE ------------------
+        if game_state == "MAIN_MENU":
             if event.type == pygame.MOUSEBUTTONDOWN:
                 if SINGLE_PLAYER_RECT.collidepoint(event.pos):
                     backend.update_game_state("SINGLE_PLAYER")
@@ -529,12 +531,16 @@ while running:
                     backend.init_network() # Initialize server
                     backend.update_game_state("WAITING_FOR_PLAYERS_TO_CONNECT")
 
-         # ------------------ WAITING FOR PLAYERS TO ONNECT STATE ------------------
-        elif backend.GAME_STATE == "WAITING_FOR_PLAYERS_TO_CONNECT":
+        # ------------------ HOST_CONNECT STATE ------------------
+
+        # In Progress
+
+        # ------------------ WAITING FOR PLAYERS TO CONNECT STATE ------------------
+        elif game_state == "WAITING_FOR_PLAYERS_TO_CONNECT":
             pass
 
         # ------------------ SHIP SELECTION STATE ------------------
-        elif backend.GAME_STATE == "SELECT_SHIPS":
+        elif game_state == "SELECT_SHIPS":
             if backend.player_id == player1_id:
                 if event.type == pygame.KEYDOWN:
                     if event.key in [
@@ -561,7 +567,7 @@ while running:
                     backend.update_game_state("PLACE_SHIPS")
 
         # ------------------ SHIP PLACING STATE ------------------
-        elif backend.GAME_STATE == "PLACE_SHIPS":
+        elif game_state == "PLACE_SHIPS":
             for ship in ships:
                 ship.handle_event(event)    
 
@@ -583,12 +589,12 @@ while running:
                         backend.update_game_state("WAITING_FOR_OPPONENT")
 
         # ------------------ WAITING FOR OTHER PLAYER STATE ------------------
-        elif backend.GAME_STATE == "WAITING_FOR_OPPONENT":
+        elif game_state == "WAITING_FOR_OPPONENT":
             if backend.all_ships_locked:
                 backend.update_game_state("RUNNING_GAME")
 
         # ------------------ RUNNING GAME STATE ------------------
-        elif backend.GAME_STATE == "RUNNING_GAME":
+        elif game_state == "RUNNING_GAME":
             # Initialize turn rule once when the match begins
             if not started_running_game:
                 started_running_game = True
@@ -612,39 +618,44 @@ while running:
                             backend.send_bomb(click_row, click_col)
                         break
 
-        elif backend.GAME_STATE == "GAME_OVER":
+        # ------------------ GAME OVER STATE ------------------
+        elif game_state == "GAME_OVER":
             if event.type == pygame.MOUSEBUTTONDOWN:
                 if BUTTON_RECT.collidepoint(mouse_pos):
+                    ships_selected = False
+                    started_running_game = False
+                    game_mode = 0
                     backend.disconnect_from_server()
                     backend.reset_game()
 
-        elif backend.GAME_STATE == "SINGLE_PLAYER":
+        # ------------------ SINGLE PLAYER STATE ------------------
+        elif game_state == "SINGLE_PLAYER":
             if event.type == pygame.MOUSEBUTTONDOWN:
                 if BUTTON_RECT.collidepoint(mouse_pos):
                     backend.update_game_state("MAIN_MENU")
 
     # ------------------ DRAWING ------------------
-    if backend.GAME_STATE == "MAIN_MENU":
+    if game_state == "MAIN_MENU":
         draw_main_menu(mouse_pos)
 
-    elif backend.GAME_STATE == "WAITING_FOR_PLAYERS_TO_CONNECT":
-        draw_waiting_for_player(f"Waiting for player opponent to connect...", opponent_id)
+    elif game_state == "WAITING_FOR_PLAYERS_TO_CONNECT":
+        draw_waiting_for_player(f"Waiting for opponent to connect...", opponent_id)
     
-    elif backend.GAME_STATE == "SELECT_SHIPS":
+    elif game_state == "SELECT_SHIPS":
         if backend.player_id == player1_id:
             draw_ship_selection()
         if backend.player_id == player2_id:
             draw_waiting_for_player(f"Player {player1_id} will select 1-5 ships", player1_id)
     
-    elif backend.GAME_STATE == "PLACE_SHIPS":
+    elif game_state == "PLACE_SHIPS":
         draw_ship_placement()
         draw_coordinates(GRID_PADDING, GRID_PADDING)
         draw_control_buttons(mouse_pos)
     
-    elif backend.GAME_STATE == "WAITING_FOR_OPPONENT":
+    elif game_state == "WAITING_FOR_OPPONENT":
         draw_waiting_for_player(f"Player {opponent_id} is still placing their ships", opponent_id)
 
-    elif backend.GAME_STATE == "RUNNING_GAME":
+    elif game_state == "RUNNING_GAME":
         screen.fill(BG_COLOR)
         draw_coordinates(GRID_PADDING, top_grid_y)
         draw_coordinates(GRID_PADDING, bottom_grid_y)
@@ -656,11 +667,11 @@ while running:
         draw_status_panel()
         draw_marks()
     
-    elif backend.GAME_STATE == "GAME_OVER":
+    elif game_state == "GAME_OVER":
         draw_game_over(backend.winner)
         draw_button(mouse_pos, color=(0,255,0), text="Main Menu")
     
-    elif backend.GAME_STATE == "SINGLE_PLAYER":
+    elif game_state == "SINGLE_PLAYER":
         draw_message("Single player construction in progress")
         draw_button(mouse_pos)
 

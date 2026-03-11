@@ -42,7 +42,7 @@ def handle_message(conn, player_index, message):
         send(opponent,new_message)
 
     elif message["type"] == "place_ships":
-        print("Server: Ships Placed and Locked")
+        print("SERVER: Ships Placed and Locked")
         if player_index == 0:
             player1_locked = True
         else:
@@ -82,7 +82,7 @@ def handle_message(conn, player_index, message):
         send(conn,message)
 
     else:
-        print(f"Sends {message} to other player")
+        print(f"SERVER: Player {player_index} sending {message["type"]} message to opponent")
         send(opponent,message)
 
 running = False
@@ -101,6 +101,7 @@ def handle_client(player_index):
             data = conn.recv(4096).decode()
             if not data:
                 print("SERVER ERROR: Did not receive data")
+                running = False
                 break
 
             buffer += data
@@ -114,10 +115,11 @@ def handle_client(player_index):
 
         except Exception as e:
             print("SERVER: Client disconnected:", e)
-            clients.remove(conn)
             break
 
     conn.close()
+    if conn in clients:
+        clients.remove(conn)
 
 def main():
     global clients, player1_locked, player2_locked, running
@@ -140,7 +142,7 @@ def main():
     for i in range(2):
         player_id = i+1
         conn, addr = server.accept()
-        print(f"Player {player_id} connected from {addr}")
+        print(f"SERVER: Player {player_id} connected from {addr}")
         clients.append(conn)
 
         # Send player ID to client
@@ -162,13 +164,14 @@ def main():
     for conn in clients:
         send(conn,start_msg)
 
-    print("Both players connected. Game starting.")
+    print("SERVER: Both players connected. Game starting.")
 
     # Keep server alive
     while True:
         if len(clients) < 2:
-            print("SERVER: Server shutting down...")
             running = False
             server.close()
+            print("SERVER: Shutting down...")
+            time.sleep(1) # Give server time to shut down
             break
         time.sleep(0.1)
