@@ -462,7 +462,7 @@ def draw_marks():
 
 def draw_multi_bomb_preview(mouse_pos):
     # When multi-bomb mode is armed, show the player
-    # which 3x3 area will be attacked beofre they click.
+    # which 3x3 area will be attacked before they click.
     if not multi_bomb_mode:
         return
 
@@ -477,7 +477,6 @@ def draw_multi_bomb_preview(mouse_pos):
                 y = top_grid_y + r * CELL_SIZE
                 rect = pygame.Rect(x, y, CELL_SIZE, CELL_SIZE)
                 pygame.draw.rect(screen, (240, 220, 80), rect, 3)
-                break
 
 def draw_status_panel():
     # Simple UI panel to explain state during demo
