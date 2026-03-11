@@ -4,6 +4,7 @@
 import socket
 import json
 import threading
+import time
 
 HOST = "0.0.0.0"
 PORT = 5000
@@ -11,11 +12,8 @@ PORT = 5000
 clients = []
 
 # Game related memory
-ships = []
 player1_locked = False
 player2_locked = False
-p1_game_state = None
-p2_game_state = None
 player_turn = 1
 
 GAME_OVER = False
@@ -27,16 +25,12 @@ def send(conn, msg):
 def handle_message(conn, player_index, message):
     opponent = clients[1 - player_index]
 
-    global p1_game_state, p2_game_state, ships, player1_locked, player2_locked
-    global GAME_OVER, p1_game_state, p2_game_state, ships, player1_locked, player2_locked
+    global  p2_game_state, player1_locked, player2_locked
+    global GAME_OVER, p2_game_state, player1_locked, player2_locked
 
     if message["type"] == "game_state":
         state = message["state"]
         sender = message["sender"]
-        if sender == 1:
-            p1_game_state = state
-        else:
-            p2_game_state = message["state"]
         print(f"SERVER: Player {sender} reached state: {state}")
 
     elif message["type"] == "ship_count":
@@ -49,7 +43,6 @@ def handle_message(conn, player_index, message):
 
     elif message["type"] == "place_ships":
         print("Server: Ships Placed and Locked")
-        ships = message["ships"]
         if player_index == 0:
             player1_locked = True
         else:
@@ -92,25 +85,22 @@ def handle_message(conn, player_index, message):
         print(f"Sends {message} to other player")
         send(opponent,message)
 
-
+running = False
 def handle_client(player_index):
-    global clients
+    global clients, running
     buffer = ""
     message = ""
 
     conn = clients[player_index]
 
-    global p1_game_state, p2_game_state, ships, player1_locked, player2_locked
-    global GAME_OVER, p1_game_state, p2_game_state, ships, player1_locked, player2_locked
+    global p2_game_state, player1_locked, player2_locked
+    global GAME_OVER, p2_game_state, player1_locked, player2_locked
 
-    while True:
-        if len(clients) <= 0:
-            break
-
+    while running:
         try:
             data = conn.recv(4096).decode()
             if not data:
-                print("SERVER ERROR: MESSAGE ERROR 1")
+                print("SERVER ERROR: Did not receive data")
                 break
 
             buffer += data
@@ -118,7 +108,7 @@ def handle_client(player_index):
             while "\n" in buffer:
                 line, buffer = buffer.split("\n", 1)
                 message = json.loads(line)
-                print(f"Received from Player {player_index}: {message}")
+                print(f"SERVER: Received from Player {player_index}: {message}")
                 handle_message(conn, player_index, message)
 
 
@@ -130,13 +120,21 @@ def handle_client(player_index):
     conn.close()
 
 def main():
-    global clients
+    global clients, player1_locked, player2_locked, running
+    global GAME_OVER, winner
+
+    clients = []
+    player1_locked = False
+    player2_locked = False
+    GAME_OVER = False
+    winner = None
 
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     server.bind((HOST, PORT))
     server.listen(2)
 
-    print("Server waiting for players...")
+    print("SERVER: Waiting for players...")
 
     # Accept two players
     for i in range(2):
@@ -152,6 +150,7 @@ def main():
         }
         send(conn,msg)
 
+    running = True
     # Start a thread for each player
     threading.Thread(target=handle_client, args=(0,), daemon=True).start()
     threading.Thread(target=handle_client, args=(1,), daemon=True).start()
@@ -159,6 +158,7 @@ def main():
     start_msg = {
         "type": "start_game"
     }
+
     for conn in clients:
         send(conn,start_msg)
 
@@ -167,5 +167,8 @@ def main():
     # Keep server alive
     while True:
         if len(clients) < 2:
+            print("SERVER: Server shutting down...")
+            running = False
             server.close()
-        pass
+            break
+        time.sleep(0.1)

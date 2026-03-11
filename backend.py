@@ -50,6 +50,22 @@ shots_received_miss = []
 shots_sent_hit = []
 shots_sent_miss = []
 
+
+####################################################################### AI Components #######################################################################################
+
+# Coming Soon: AI Components
+
+
+
+
+
+
+
+
+
+
+
+
 ############################################################################# Server Communication #############################################################################
 sock = None
 
@@ -57,7 +73,7 @@ sock = None
 def _send(msg):
     if GAME_MODE == 2:
         sock.sendall((json.dumps(msg)+ "\n").encode())
-        print(f"{msg["type"]} message sent")
+        # print(f"{msg["type"]} message sent")
     else:
         print("Cannot send message to server. Game in Single Player Mode")
 
@@ -402,7 +418,7 @@ def handle_game_over(winner_id):
         print("GAME OVER! YOU LOSE.")
 
 def reset_game():
-    global grid, target_grid, ships, player_id, winner, opponent_ships_sunk
+    global grid, target_grid, ships, player_id, winner, opponent_ships_sunk, sock
     global shots_received_hit, shots_received_miss, shots_sent_hit, shots_sent_miss
     global ship_count, your_turn, GAME_STATE, GAME_MODE
     global ships_locked, all_ships_locked
@@ -515,16 +531,21 @@ This allows board.py to be be the only file needing to be run
 The first client that runs it hosts the server and is player 1
 """
 def start_local_server():
+    global server_host
+    if server_host:
+        return
     try:
         import server
         threading.Thread(target=server.main, daemon=True).start()
+        server_host = True
     except OSError:
         pass  # another instance started it first
 
+server_started = False
+server_host = False # True if this instance is hosting the server
 def connect_to_server():
-    global sock
+    global sock, server_started
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    server_started = False
 
     while True:
         try:
@@ -549,5 +570,16 @@ def init_network():
     print("Connected to server")
 
 def disconnect_from_server():
-    global sock
-    sock.close()
+    global sock, server_started, server_host
+    if sock:
+        try:
+            sock.shutdown(socket.SHUT_RDWR)
+        except:
+            pass
+        sock.close()
+        sock = None
+
+    if server_host:
+        import server
+        server.running = False
+        server_host = False

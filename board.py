@@ -615,6 +615,7 @@ while running:
         elif backend.GAME_STATE == "GAME_OVER":
             if event.type == pygame.MOUSEBUTTONDOWN:
                 if BUTTON_RECT.collidepoint(mouse_pos):
+                    backend.disconnect_from_server()
                     backend.reset_game()
 
         elif backend.GAME_STATE == "SINGLE_PLAYER":
@@ -658,7 +659,6 @@ while running:
     elif backend.GAME_STATE == "GAME_OVER":
         draw_game_over(backend.winner)
         draw_button(mouse_pos, color=(0,255,0), text="Main Menu")
-        backend.disconnect_from_server()
     
     elif backend.GAME_STATE == "SINGLE_PLAYER":
         draw_message("Single player construction in progress")
