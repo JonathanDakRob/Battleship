@@ -5,6 +5,7 @@ import socket
 import json
 import threading
 import time
+import random
 
 SERVER_IP = "127.0.0.1"
 PORT = 5000
@@ -54,6 +55,169 @@ shots_sent_miss = []
 ####################################################################### AI Components #######################################################################################
 
 # Coming Soon: AI Components
+
+import random
+
+# AI's own grid and ships (hidden from player)
+ai_grid = [["." for _ in range(BOARD_SIZE)] for _ in range(BOARD_SIZE)]
+ai_ships = []
+
+# AI targeting state for medium difficulty
+ai_mode = "hunt"        # "hunt" = random, "target" = follow up on a hit
+ai_hits_pending = []    # Cells the AI has hit but not yet sunk
+ai_tried = set()        # Every cell the AI has already shot
+
+# Difficulty: "easy", "medium", "hard"
+ai_difficulty = "medium"
+
+def ai_place_ships(count):
+    """Randomly place AI ships on ai_grid."""
+    global ai_ships, ai_grid
+    ai_grid = [["." for _ in range(BOARD_SIZE)] for _ in range(BOARD_SIZE)]
+    ai_ships = []
+
+    for size in range(1, count + 1):
+        placed = False
+        while not placed:
+            orientation = random.choice(["H", "V"])
+            row = random.randint(0, BOARD_SIZE - 1)
+            col = random.randint(0, BOARD_SIZE - 1)
+            cells = compute_ship_cells(row, col, size, orientation)
+            # Check against ai_grid, not the player's grid
+            valid = all(in_bounds(r, c) and ai_grid[r][c] == "." for r, c in cells)
+            if valid:
+                for r, c in cells:
+                    ai_grid[r][c] = "S"
+                ai_ships.append(cells)
+                placed = True
+
+def ai_pick_shot():
+    """Pick a cell to shoot based on difficulty level."""
+    global ai_mode, ai_hits_pending
+
+    # Hard: cheat by reading the player's grid directly, never misses
+    if ai_difficulty == "hard":
+        while True:
+            r = random.randint(0, BOARD_SIZE - 1)
+            c = random.randint(0, BOARD_SIZE - 1)
+            if (r, c) not in ai_tried and grid[r][c] == "S":
+                return r, c
+
+    # Easy: purely random, no memory of hits
+    elif ai_difficulty == "easy":
+        while True:
+            r = random.randint(0, BOARD_SIZE - 1)
+            c = random.randint(0, BOARD_SIZE - 1)
+            if (r, c) not in ai_tried:
+                return r, c
+
+    # Medium: hunt randomly, then target neighbors after a hit
+    elif ai_difficulty == "medium":
+        if ai_mode == "target" and ai_hits_pending:
+            r, c = ai_hits_pending[-1]
+            for dr, dc in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
+                nr, nc = r + dr, c + dc
+                if in_bounds(nr, nc) and (nr, nc) not in ai_tried:
+                    return nr, nc
+            # No valid neighbors left for this hit, pop it and recurse
+            ai_hits_pending.pop()
+            return ai_pick_shot()
+
+        # Hunt mode: random untried cell
+        while True:
+            r = random.randint(0, BOARD_SIZE - 1)
+            c = random.randint(0, BOARD_SIZE - 1)
+            if (r, c) not in ai_tried:
+                return r, c
+
+def ai_receive_result(row, col, hit, sunk):
+    """Update AI targeting state after learning the result of its shot."""
+    global ai_mode, ai_hits_pending
+    ai_tried.add((row, col))
+    if hit:
+        if ai_difficulty == "medium":
+            ai_hits_pending.append((row, col))
+            ai_mode = "target"
+    if sunk:
+        if ai_difficulty == "medium":
+            ai_hits_pending.clear()
+            ai_mode = "hunt"
+
+def ai_take_turn():
+    """
+    The AI shoots at the player's grid.
+    Returns (row, col, hit, sunk, all_sunk) so board.py can update the display.
+    """
+    row, col = ai_pick_shot()
+    ai_tried.add((row, col))
+
+    hit = (grid[row][col] == "S")
+    sunk = False
+    all_sunk_result = False
+    ship_idx = get_ship_index(row, col)
+
+    if hit:
+        grid[row][col] = "X"
+        shots_received_hit.append((row, col))
+        sunk = check_ship_sunk(ship_idx)
+        if sunk:
+            sink_own_ship(ship_idx)
+            all_sunk_result = all_ships_sunk()
+    else:
+        grid[row][col] = "O"
+        shots_received_miss.append((row, col))
+
+    ai_receive_result(row, col, hit, sunk)
+    return row, col, hit, sunk, all_sunk_result
+
+def player_shoot_ai(row, col):
+    """
+    Player shoots at the AI's grid.
+    Returns (hit, sunk, all_sunk) so board.py can update target_grid and the display.
+    """
+    global opponent_ships_sunk
+
+    hit = (ai_grid[row][col] == "S")
+    sunk = False
+    all_sunk_result = False
+
+    if hit:
+        ai_grid[row][col] = "X"
+        shots_sent_hit.append((row, col))
+        # Check if that ship is fully sunk
+        for ship in ai_ships:
+            if (row, col) in ship:
+                if all(ai_grid[r][c] == "X" for r, c in ship):
+                    sunk = True
+                    for r, c in ship:
+                        ai_grid[r][c] = "D"
+                        target_grid[r][c] = "D"
+                    opponent_ships_sunk += 1
+                break
+        if not sunk:
+            target_grid[row][col] = "X"
+        # Check if ALL AI ships are sunk
+        all_sunk_result = all(
+            ai_grid[r][c] == "D"
+            for ship in ai_ships
+            for r, c in ship
+        )
+    else:
+        ai_grid[row][col] = "O"
+        shots_sent_miss.append((row, col))
+        target_grid[row][col] = "O"
+
+    return hit, sunk, all_sunk_result
+
+def reset_ai():
+    """Reset all AI state. Call this inside reset_game()."""
+    global ai_grid, ai_ships, ai_mode, ai_hits_pending, ai_tried, ai_difficulty
+    ai_grid = [["." for _ in range(BOARD_SIZE)] for _ in range(BOARD_SIZE)]
+    ai_ships = []
+    ai_mode = "hunt"
+    ai_hits_pending = []
+    ai_tried = set()
+    ai_difficulty = "medium"
 
 
 
@@ -435,6 +599,8 @@ def reset_game():
     winner = False
     opponent_ships_sunk = 0
 
+    reset_ai()
+
     ship_count = 0
     your_turn = False
 
@@ -442,6 +608,8 @@ def reset_game():
     GAME_STATE = "MAIN_MENU"
     ships_locked = False
     all_ships_locked = False
+
+
 
     print("Game has been reset.")
     return True

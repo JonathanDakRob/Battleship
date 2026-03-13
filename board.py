@@ -39,6 +39,11 @@ BUTTON_RECT = pygame.Rect(WINDOW_WIDTH//2 - button_rect_width//2,
                           button_rect_width,
                           button_rect_height)
 
+EASY_RECT   = pygame.Rect(WINDOW_WIDTH//2 - 100, WINDOW_HEIGHT//2 - 90, 200, 50)
+MEDIUM_RECT = pygame.Rect(WINDOW_WIDTH//2 - 100, WINDOW_HEIGHT//2 - 20, 200, 50)
+HARD_RECT   = pygame.Rect(WINDOW_WIDTH//2 - 100, WINDOW_HEIGHT//2 + 50, 200, 50)
+
+
 
 # ------------------ INIT ------------------
 pygame.init() # Initialize pygame
@@ -225,6 +230,24 @@ def draw_main_menu(mouse_pos):
     
     return SINGLE_PLAYER_RECT, MULTI_PLAYER_RECT
 
+def draw_difficulty_selection(mouse_pos):
+    screen.fill(BG_COLOR)
+    font       = pygame.font.SysFont(None, 40)
+    btn_font   = pygame.font.SysFont(None, 32)
+    title      = font.render("Select Difficulty", True, (255, 255, 255))
+    screen.blit(title, (WINDOW_WIDTH//2 - title.get_width()//2, WINDOW_HEIGHT//4))
+
+    for rect, label, base_color in [
+        (EASY_RECT,   "Easy",   (60, 160, 60)),
+        (MEDIUM_RECT, "Medium", (70, 130, 180)),
+        (HARD_RECT,   "Hard",   (180, 50, 50)),
+    ]:
+        color = tuple(min(c + 30, 255) for c in base_color) if rect.collidepoint(mouse_pos) else base_color
+        pygame.draw.rect(screen, color, rect)
+        text = btn_font.render(label, True, (255, 255, 255))
+        screen.blit(text, (rect.centerx - text.get_width()//2, rect.centery - text.get_height()//2))
+
+
 def draw_message(message):
     screen.fill(BG_COLOR)
     font = pygame.font.SysFont(None, 30)
@@ -340,6 +363,8 @@ def draw_ship_placement():
         active_ship.draw(screen)
 
     #pygame.display.flip()
+
+
 
 # ------------------ GRID CREATION ------------------
 def create_grid(grid_id, start_x, start_y):
@@ -523,8 +548,9 @@ while running:
         if game_state == "MAIN_MENU":
             if event.type == pygame.MOUSEBUTTONDOWN:
                 if SINGLE_PLAYER_RECT.collidepoint(event.pos):
-                    backend.update_game_state("SINGLE_PLAYER")
                     backend.update_game_mode(1)
+                    backend.update_game_state("SELECT_DIFFICULTY")
+                    
 
                 if MULTI_PLAYER_RECT.collidepoint(event.pos):
                     backend.update_game_mode(2)
@@ -629,10 +655,73 @@ while running:
                     backend.reset_game()
 
         # ------------------ SINGLE PLAYER STATE ------------------
-        elif game_state == "SINGLE_PLAYER":
+        elif game_state == "SELECT_DIFFICULTY":
             if event.type == pygame.MOUSEBUTTONDOWN:
-                if BUTTON_RECT.collidepoint(mouse_pos):
-                    backend.update_game_state("MAIN_MENU")
+                if EASY_RECT.collidepoint(event.pos):
+                    backend.ai_difficulty = "easy"
+                    backend.update_game_state("SELECT_SHIPS_SP")
+        
+                elif MEDIUM_RECT.collidepoint(event.pos):
+                    backend.ai_difficulty = "medium"
+                    backend.update_game_state("SELECT_SHIPS_SP")
+        
+                elif HARD_RECT.collidepoint(event.pos):
+                    backend.ai_difficulty = "hard"
+                    backend.update_game_state("SELECT_SHIPS_SP")
+
+        elif game_state == "SELECT_SHIPS_SP":
+            if event.type == pygame.KEYDOWN:
+                if event.key in [pygame.K_1, pygame.K_2, pygame.K_3, pygame.K_4, pygame.K_5]:
+                    ship_count = int(event.unicode)
+                    backend.set_ship_count(ship_count)
+                    create_ships(ship_count)
+                    backend.update_game_state("PLACE_SHIPS_SP")
+
+        elif game_state == "PLACE_SHIPS_SP":
+            for ship in ships:
+                ship.handle_event(event)
+
+            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                if RESET_BUTTON_RECT.collidepoint(event.pos):
+                    backend.grid = [["." for _ in range(GRID_SIZE)] for _ in range(GRID_SIZE)]
+                    create_ships(len(ships))
+
+                elif LOCK_BUTTON_RECT.collidepoint(event.pos):
+                    all_valid = all(s.placed for s in ships)
+                    if all_valid:
+                        backend.ships.clear()
+                        for s in ships:
+                            backend.ships.append(
+                                backend.compute_ship_cells(s.grid_row, s.grid_col, s.length, s.orientation)
+                        )
+                        backend.ai_place_ships(len(ships))
+                        backend.your_turn = True
+                        backend.update_game_state("RUNNING_GAME_SP")
+
+        elif game_state == "RUNNING_GAME_SP":
+            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                if backend.your_turn:
+                    for cell in top_grid:
+                        if cell.rect.collidepoint(mouse_pos):
+                            r, c = cell.get_coords()
+                            if (r, c) not in backend.shots_sent_hit and (r, c) not in backend.shots_sent_miss:
+                                hit, sunk, all_sunk = backend.player_shoot_ai(r, c)
+                                if all_sunk:
+                                    backend.winner = True
+                                    backend.update_game_state("GAME_OVER")
+                                else:
+                                    if not hit:
+                                        backend.your_turn = False
+                            break
+
+    if backend.GAME_STATE == "RUNNING_GAME_SP" and not backend.your_turn:
+        pygame.time.wait(500)
+        row, col, hit, sunk, all_sunk = backend.ai_take_turn()
+        if all_sunk:
+            backend.winner = False
+            backend.update_game_state("GAME_OVER")
+        else:
+            backend.your_turn = True
 
     # ------------------ DRAWING ------------------
     if game_state == "MAIN_MENU":
@@ -674,6 +763,27 @@ while running:
     elif game_state == "SINGLE_PLAYER":
         draw_message("Single player construction in progress")
         draw_button(mouse_pos)
+
+    elif game_state == "SELECT_DIFFICULTY":
+        draw_difficulty_selection(mouse_pos)
+
+    elif game_state == "SELECT_SHIPS_SP":
+        draw_ship_selection()
+
+    elif game_state == "PLACE_SHIPS_SP":
+        draw_ship_placement()
+        draw_coordinates(GRID_PADDING, GRID_PADDING)
+        draw_control_buttons(mouse_pos)
+
+    elif game_state == "RUNNING_GAME_SP":
+        screen.fill(BG_COLOR)
+        draw_coordinates(GRID_PADDING, top_grid_y)
+        draw_coordinates(GRID_PADDING, bottom_grid_y)
+        for cell in all_cells:
+            cell.draw(screen, mouse_pos)
+        draw_backend_ships()
+        draw_status_panel()
+        draw_marks()
 
     pygame.display.flip()
     clock.tick(60)
