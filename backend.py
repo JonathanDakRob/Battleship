@@ -219,17 +219,6 @@ def reset_ai():
     ai_tried = set()
     ai_difficulty = "medium"
 
-
-
-
-
-
-
-
-
-
-
-
 ############################################################################# Server Communication #############################################################################
 sock = None
 
@@ -274,6 +263,18 @@ def compute_ship_cells(row, col, size, orientation):
         else:
             r, c = row + i, col
         cells.append((r, c))
+    return cells
+
+def compute_multi_bomb_cells(center_row, center_col):
+    # Build the 3x3 area centered on the clicked grid cell.
+    # Any cells that would go out of bounds are ignored.
+    cells = []
+
+    for r in range(center_row - 1, center_row + 2):
+        for c in range(center_col - 1, center_col + 2):
+            if in_bounds(r, c):
+                cells.append((r, c))
+
     return cells
 
 def is_straight_and_contiguous(cells, size):
@@ -384,6 +385,14 @@ def can_send_bomb(row, col):
         return False
     return True
 
+def can_send_multi_bomb(cells):
+    # Allow the attack if at least one square in the 3x3 area
+    # has not already been targeted before.
+    for row, col in cells:
+        if (row, col) not in shots_sent_hit and (row, col) not in shots_sent_miss:
+            return True
+        return False
+
 def send_bomb(row, col):
     global your_turn, GAME_STATE
 
@@ -417,6 +426,39 @@ def send_bomb(row, col):
 
     _send(msg)
     print(f"BOMB SENT: {row},{col}")
+
+def send_multi_bomb(row, col):
+    global your_turn, GAME_STATE
+
+    # Only allow multi-bomb during the real gameplay phase.
+    if GAME_STATE != "RUNNING_GAME":
+        print("MULTI-BOMB FAILED: Not in RUNNING_GAME.")
+        return
+
+    # Only the current player can fire.
+    if not your_turn:
+        print("MULTI-BOMB FAILED: Not your turn.")
+        return
+
+    # Convert one clicked square into a valid 3x3 attack area.
+    cells = compute_multi_bomb_cells(row, col)
+
+    # Block the attack if the whole area was already used before.
+    if not can_send_multi_bomb(cells):
+        print("MULTI-BOMB FAILED: Entire 3x3 area was already targeted.")
+        return
+
+    # Send both the center point and the full list of target cells.
+    # The server forwards this to the defender.
+    msg = {
+        "type": "multi_bomb",
+        "center_row": row,
+        "center_col": col,
+        "cells": [[r, c] for (r, c) in cells]
+    }
+
+    _send(msg)
+    print(f"MULTI-BOMB SENT: center=({row}, {col}) cells={cells}")
 
 def get_ship_index(row, col):
     # Returns the ship index containing (row, col), or -1 if no ship occupies it.
@@ -536,6 +578,76 @@ def receive_shot(row, col):
     }
     _send(msg)
 
+def receive_multi_bomb(cells):
+    # This function is called on the defending player's side.
+    # It applies the full 3x3 attack to the local board and
+    # sends one combined result message back to the attacker.
+    global shots_received_hit, shots_received_miss, grid
+
+    results = []
+    sunk_ships = []
+    sunk_indexes = []
+
+    for row, col in cells:
+        # If a square was already attacked before, record it as a repeat
+        # so the attacker still gets a full response for all 3x3 cells.
+        if (row, col) in shots_received_hit or (row, col) in shots_received_miss:
+            results.append({
+                "row": row,
+                "col": col,
+                "status": "repeat"
+            })
+            continue
+
+        hit = (grid[row][col] == "S")
+        ship_index = get_ship_index(row, col)
+
+        if hit:
+            # Mark this board square as damaged.
+            grid[row][col] = "X"
+            shots_received_hit.append((row,col))
+
+            # Check whether this hit completed an entire ship.
+            sunk = check_ship_sunk(ship_index)
+
+            if sunk:
+                # Convert that whole ship from X to D to show it is sunk.
+                sink_own_ship(ship_index)
+
+                # Avoid adding the same sunk ship multiple times
+                # if several cells from that ship were hit in the 3x3 area.
+                if ship_index not in sunk_indexes:
+                    sunk_indexes.append(ship_index)
+                    sunk_ships.append(get_ship_coords(ship_index))
+
+            results.append({
+                "row": row,
+                "col": col,
+                "status": "hit"
+            })
+
+        else:
+            # Mark misses on the defending board.
+            grid[row][col] = "O"
+            shots_received_miss.append((row,col))
+            results.append({
+                "row": row,
+                "col": col,
+                "status": "miss"
+            })
+
+    # After all 3x3 cells are processed, check if the defender has lost.
+    all_sunk = all_ships_sunk()
+
+    # Send one combined result back to the attacker.
+    msg = {
+        "type": "multi_bomb_result",
+        "results": results,
+        "sunk_ships": sunk_ships,
+        "all_sunk": all_sunk
+    }
+    _send(msg)
+
 def handle_hit_status(status, row, col, sunk, ship_coords, all_sunk):
     coord = (row,col)
 
@@ -558,6 +670,31 @@ def handle_hit_status(status, row, col, sunk, ship_coords, all_sunk):
             "winner": player_id
         }
         _send(game_over_msg)
+
+def handle_multi_bomb_result(results, sunk_ships, all_sunk):
+    # This function runs on the attacking player's side.
+    # It updates the attacker's target grid using the combined 3x3 result.
+    for result in results:
+        row = result["row"]
+        col = result["col"]
+        status = result["status"]
+
+        if status == "hit":
+            # Record this square as a successful hit on the opponent board.
+            if (row, col) not in shots_sent_hit:
+                shots_sent_hit.append((row,col))
+            target_grid[row][col] = "X"
+
+        elif status == "miss":
+            # Record this square as a miss on the opponent board.
+            if (row, col) not in shots_sent_miss:
+                shots_sent_miss.append((row,col))
+            target_grid[row][col] = "O"
+
+    # If any full ships were sunk by the 3x3 attack,
+    # mark all of those ship coordinates as D on the target grid.
+    for ship_coords in sunk_ships:
+        sink_opp_ship(ship_coords)
 
 # Helper: hit counts per ship
 def ship_hit_counts():
@@ -652,6 +789,30 @@ def handle_server_message(message):
         all_sunk = message["all_sunk"]
 
         handle_hit_status(status,row,col,sunk,ship_coords,all_sunk)
+
+    elif mtype == "multi_bomb":
+        # Defender receives the full 3x3 target area from the attacker.
+        cells = []
+        for pair in message["cells"]:
+            cells.append((pair[0], pair[1]))
+        receive_multi_bomb(cells)
+
+    elif mtype == "multi_bomb_result":
+        # Attacker receives the final combined outcome of the 3x3 attack.
+        results = message["results"]
+        sunk_ships = message["sunk_ships"]
+        all_sunk = message["all_sunk"]
+
+        handle_multi_bomb_result(results,sunk_ships,all_sunk)
+
+        # If the defender has no ships left after the multi-bomb,
+        # notify the server that this player won.
+        if all_sunk:
+            game_over_msg = {
+                "type": "game_over",
+                "winner": player_id,
+            }
+            _send(game_over_msg)
 
     elif mtype == "change_turn":
         if your_turn:
@@ -752,3 +913,4 @@ def disconnect_from_server():
         import server
         server.running = False
         server_host = False
+    server_started = False
