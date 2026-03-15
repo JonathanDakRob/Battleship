@@ -210,6 +210,64 @@ def player_shoot_ai(row, col):
 
     return hit, sunk, all_sunk_result
 
+def player_multi_bomb_ai(center_row, center_col):
+    """
+    Player uses a one-time 3x3 multi-bomb against the AI board.
+    Returns (used_successfully, all_sunk_result).
+    """
+    global opponent_ships_sunk, multi_bomb_used
+
+    if multi_bomb_used:
+        print("MULTI-BOMB FAILED: Already used this game.")
+        return False, False
+
+    cells = compute_multi_bomb_cells(center_row, center_col)
+
+    if not can_send_multi_bomb(cells):
+        print("MULTI-BOMB FAILED: Entire 3x3 area was already targeted.")
+        return False, False
+
+    sunk_ship_indexes = []
+
+    for row, col in cells:
+        # Ignore already-targeted cells, but continue processing the rest.
+        if (row, col) in shots_sent_hit or (row, col) in shots_sent_miss:
+            continue
+
+        hit = (ai_grid[row][col] == "S")
+
+        if hit:
+            ai_grid[row][col] = "X"
+            shots_sent_hit.append((row, col))
+            target_grid[row][col] = "X"
+
+            # Check whether this hit sunk an AI ship.
+            for ship_index, ship in enumerate(ai_ships):
+                if (row, col) in ship:
+                    if all(ai_grid[r][c] in ("X", "D") for r, c in ship):
+                        if ship_index not in sunk_ship_indexes:
+                            sunk_ship_indexes.append(ship_index)
+                            opponent_ships_sunk += 1
+
+                            for r, c in ship:
+                                ai_grid[r][c] = "D"
+                                target_grid[r][c] = "D"
+                    break
+        else:
+            ai_grid[row][col] = "O"
+            shots_sent_miss.append((row, col))
+            target_grid[row][col] = "O"
+
+    all_sunk_result = all(
+        ai_grid[r][c] == "D"
+        for ship in ai_ships
+        for r, c in ship
+    )
+
+    multi_bomb_used = True
+    print(f"MULTI-BOMB used in single player at center ({center_row}, {center_col})")
+    return True, all_sunk_result
+
 def reset_ai():
     """Reset all AI state. Call this inside reset_game()."""
     global ai_grid, ai_ships, ai_mode, ai_hits_pending, ai_tried, ai_difficulty
@@ -728,7 +786,7 @@ def handle_game_over(winner_id):
 def reset_game():
     global grid, target_grid, ships, player_id, winner, opponent_ships_sunk, sock
     global shots_received_hit, shots_received_miss, shots_sent_hit, shots_sent_miss
-    global ship_count, your_turn, GAME_STATE, GAME_MODE
+    global ship_count, your_turn, GAME_STATE, GAME_MODE, multi_bomb_used
     global ships_locked, all_ships_locked
 
     grid = [["." for _ in range(BOARD_SIZE)] for _ in range(BOARD_SIZE)]

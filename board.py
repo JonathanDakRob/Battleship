@@ -513,8 +513,13 @@ def draw_status_panel():
     else:
         multi_bomb_status = "READY"
 
+    if backend.GAME_MODE == 2:
+        player_label = str(backend.player_id)
+    else:
+        player_label = "Single Player"
+
     lines = [
-        f"Player: {backend.player_id}",
+        f"Player: {player_label}",
         f"Your turn: {backend.your_turn}",
         f"Multi-bomb: {multi_bomb_status}",
         f"Press M: Toggle",
@@ -579,6 +584,8 @@ while running:
         if game_state == "MAIN_MENU":
             if event.type == pygame.MOUSEBUTTONDOWN:
                 if SINGLE_PLAYER_RECT.collidepoint(event.pos):
+                    reset_local_ui_state()
+                    backend.multi_bomb_used = False
                     backend.update_game_mode(1)
                     backend.update_game_state("SELECT_DIFFICULTY")
                     
@@ -752,20 +759,48 @@ while running:
                         backend.update_game_state("RUNNING_GAME_SP")
 
         elif game_state == "RUNNING_GAME_SP":
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_m:
+                    # Only allow multi-bomb mode if it has not already been used.
+                    if backend.multi_bomb_used:
+                        print("MULTI-BOMB already used this game.")
+                        multi_bomb_mode = False
+                    else:
+                        multi_bomb_mode = not multi_bomb_mode
+                        print(f"MULTI-BOMB MODE: {multi_bomb_mode}")
+
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 if backend.your_turn:
                     for cell in top_grid:
                         if cell.rect.collidepoint(mouse_pos):
                             r, c = cell.get_coords()
-                            if (r, c) not in backend.shots_sent_hit and (r, c) not in backend.shots_sent_miss:
-                                hit, sunk, all_sunk = backend.player_shoot_ai(r, c)
-                                if all_sunk:
-                                    backend.winner = True
-                                    backend.update_game_state("GAME_OVER")
-                                else:
-                                    if not hit:
+
+                            if multi_bomb_mode:
+                                print(f"FRONTEND: Sending SINGLE-PLAYER MULTI-BOMB to {(r, c)}")
+                                used_successfully, all_sunk = backend.player_multi_bomb_ai(r, c)
+
+                                # Only disable the mode after a successful use.
+                                if used_successfully:
+                                    multi_bomb_mode = False
+
+                                    if all_sunk:
+                                        backend.winner = True
+                                        backend.update_game_state("GAME_OVER")
+                                    else:
+                                        # Multi-bomb always ends the player's turn in single-player.
                                         backend.your_turn = False
-                            break
+                                break
+
+                            else:
+                                if (r, c) not in backend.shots_sent_hit and (r, c) not in backend.shots_sent_miss:
+                                    hit, sunk, all_sunk = backend.player_shoot_ai(r, c)
+                                    if all_sunk:
+                                        backend.winner = True
+                                        backend.update_game_state("GAME_OVER")
+                                    else:
+                                        if not hit:
+                                            backend.your_turn = False
+                                break
 
     if backend.GAME_STATE == "RUNNING_GAME_SP" and not backend.your_turn:
         pygame.time.wait(500)
@@ -836,6 +871,7 @@ while running:
         for cell in all_cells:
             cell.draw(screen, mouse_pos)
         draw_backend_ships()
+        draw_multi_bomb_preview(mouse_pos)
         draw_status_panel()
         draw_marks()
 
