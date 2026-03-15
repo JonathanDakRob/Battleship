@@ -110,6 +110,7 @@ def handle_message(conn, player_index, message):
         send(opponent,message)
 
 running = False
+
 def handle_client(player_index):
     global clients, running
     buffer = ""

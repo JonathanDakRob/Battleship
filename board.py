@@ -1,5 +1,4 @@
 #This file is for creating the interactive battleship board
-
 #This file will handle the frontend of our battleship game
 
 import pygame
@@ -64,7 +63,6 @@ class Cell:
         pygame.draw.rect(surface, color, self.rect, 2)
 
     def handle_click(self):
-
         letters = "ABCDEFGHIJ"
         coord = f"{letters[self.row]}{self.col + 1}"
 
@@ -371,8 +369,6 @@ def draw_ship_placement():
 
     #pygame.display.flip()
 
-
-
 # ------------------ GRID CREATION ------------------
 def create_grid(grid_id, start_x, start_y):
     cells = []
@@ -510,10 +506,17 @@ def draw_status_panel():
 
     font = pygame.font.SysFont(None, 20)
 
+    if backend.multi_bomb_used:
+        multi_bomb_status = "USED"
+    elif multi_bomb_mode:
+        multi_bomb_status = "ARMED"
+    else:
+        multi_bomb_status = "READY"
+
     lines = [
         f"Player: {backend.player_id}",
         f"Your turn: {backend.your_turn}",
-        f"Multi-bomb: {'ARMED' if multi_bomb_mode else 'DISABLED'}",
+        f"Multi-bomb: {multi_bomb_status}",
         f"Press M: Toggle",
         f"Ships sunk: {backend.get_num_ships_sunk()}/{len(backend.ships)}",
         f"Enemy ships sunk: {backend.opponent_ships_sunk}/{len(backend.ships)}",
@@ -658,9 +661,14 @@ while running:
 
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_m:
-                    # Press M to toggle multi-bomb mode on or off.
-                    multi_bomb_mode = not multi_bomb_mode
-                    print(f"MULTI-BOMB MODE: {multi_bomb_mode}")
+                    # Only allow multibomb mode if it has not already been used.
+                    if backend.multi_bomb_used:
+                        print("MULTI-BOMB already used this game.")
+                        multi_bomb_mode = False
+                    else:
+                        # Press M to toggle multi-bomb mode on or off.
+                        multi_bomb_mode = not multi_bomb_mode
+                        print(f"MULTI-BOMB MODE: {multi_bomb_mode}")
 
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 # Gate input so only the active player can fire
@@ -694,6 +702,7 @@ while running:
                 if BUTTON_RECT.collidepoint(mouse_pos):
                     ships_selected = False
                     started_running_game = False
+                    multi_bomb_mode = False
                     game_mode = 0
                     backend.disconnect_from_server()
                     backend.reset_game()

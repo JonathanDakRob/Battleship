@@ -35,6 +35,7 @@ winner = False
 ships_locked = False
 all_ships_locked = False
 opponent_ships_sunk = 0
+multi_bomb_used = False # True after the player uses their one multibomb for this game
 
 # Game mode: Single or Multi-player
 # Single Player: 1
@@ -428,7 +429,7 @@ def send_bomb(row, col):
     print(f"BOMB SENT: {row},{col}")
 
 def send_multi_bomb(row, col):
-    global your_turn, GAME_STATE
+    global your_turn, GAME_STATE, multi_bomb_used
 
     # Only allow multi-bomb during the real gameplay phase.
     if GAME_STATE != "RUNNING_GAME":
@@ -438,6 +439,11 @@ def send_multi_bomb(row, col):
     # Only the current player can fire.
     if not your_turn:
         print("MULTI-BOMB FAILED: Not your turn.")
+        return
+
+    # Each player can only use multibomb once per game.
+    if multi_bomb_used:
+        print("MULTI-BOMB FAILED: Already used this game.")
         return
 
     # Convert one clicked square into a valid 3x3 attack area.
@@ -458,6 +464,7 @@ def send_multi_bomb(row, col):
     }
 
     _send(msg)
+    multi_bomb_used = True
     print(f"MULTI-BOMB SENT: center=({row}, {col}) cells={cells}")
 
 def get_ship_index(row, col):
@@ -740,13 +747,12 @@ def reset_game():
 
     ship_count = 0
     your_turn = False
+    multi_bomb_used = False
 
     GAME_MODE = 0
     GAME_STATE = "MAIN_MENU"
     ships_locked = False
     all_ships_locked = False
-
-
 
     print("Game has been reset.")
     return True
@@ -846,7 +852,6 @@ def listen_to_server():
         except:
             break
 
-
 """
 The following functions work as follows:
     board.py runs init_network():
@@ -873,6 +878,7 @@ def start_local_server():
 
 server_started = False
 server_host = False # True if this instance is hosting the server
+
 def connect_to_server():
     global sock, server_started
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
