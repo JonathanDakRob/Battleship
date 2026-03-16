@@ -5,6 +5,7 @@ import pygame
 import sys
 import os
 import backend
+import math
 
 # ------------------ CONFIG ------------------
 os.environ['SDL_VIDEO_CENTERED'] = '1' 
@@ -342,6 +343,25 @@ def draw_game_over(winner):
          WINDOW_HEIGHT // 2 + 10)
     )
 
+def draw_loading_circle(angle):
+    """
+    surface: pygame surface to draw on
+    center: (x, y)
+    radius: circle radius
+    angle: current rotation angle
+    """
+    screen.fill(BG_COLOR)
+
+    center = (WINDOW_WIDTH//2, WINDOW_HEIGHT//2)
+    radius = 15
+    rect = pygame.Rect(0, 0, radius * 2, radius * 2)
+    rect.center = center
+
+    start_angle = angle
+    end_angle = angle + math.pi / 2   # length of arc
+
+    pygame.draw.arc(screen, (255, 255, 255), rect, start_angle, end_angle, 4)
+
 def draw_ship_placement():
     screen.fill(BG_COLOR)
 
@@ -535,12 +555,6 @@ def draw_status_panel():
         surf = font.render(text, True, (230, 230, 230))
         screen.blit(surf, (panel_x, panel_y + i * 22))
 
-    # # Clear visible win/lose message
-    # if backend.game_over:
-    #     big = pygame.font.SysFont(None, 28)
-    #     msg = big.render("GAME OVER", True, (255, 100, 100))
-    #     screen.blit(msg, (panel_x, panel_y + 10 + len(lines) * 22))
-
 def draw_lock_button(mouse_pos):
     # Place button at the bottom center
     button_rect = pygame.Rect(WINDOW_WIDTH // 2 - 70, WINDOW_HEIGHT - 50, 140, 35)
@@ -556,10 +570,18 @@ def draw_lock_button(mouse_pos):
     screen.blit(text, (button_rect.centerx - text.get_width() // 2, button_rect.centery - text.get_height() // 2))
     return button_rect
 
+# ------------------ START SERVER FUNCTION ------------------
+import threading
+def start_network():
+    backend.init_network()
+    backend.update_game_state("WAITING_FOR_PLAYERS_TO_CONNECT")
+
 # ------------------ MAIN LOOP ------------------
 # Please use these player_id variables when printing sending/printing things like: "Waiting For Player X"
 player1_id = 1 
 player2_id = 2
+opponent_id = None
+loading_angle = 0.0
 
 running = True
 ships_selected = False # Used to move on from ship selection stage
@@ -570,7 +592,7 @@ game_mode = 0
 # ------------------------------------ GAMEPLAY LOOP ------------------------------------
 while running:
     mouse_pos = pygame.mouse.get_pos()
-
+    
     if backend.player_id != None:
         opponent_id = (backend.player_id % 2) + 1
 
@@ -588,16 +610,16 @@ while running:
                     backend.multi_bomb_used = False
                     backend.update_game_mode(1)
                     backend.update_game_state("SELECT_DIFFICULTY")
-                    
 
                 if MULTI_PLAYER_RECT.collidepoint(event.pos):
+                    backend.update_game_state("LOADING")
                     backend.update_game_mode(2)
-                    backend.init_network() # Initialize server
-                    backend.update_game_state("WAITING_FOR_PLAYERS_TO_CONNECT")
 
-        # ------------------ HOST_CONNECT STATE ------------------
+                    threading.Thread(target=start_network, daemon=True).start()
 
-        # In Progress
+        # ------------------ LOADING STATE ------------------
+        elif game_state == "LOADING":
+            pass
 
         # ------------------ WAITING FOR PLAYERS TO CONNECT STATE ------------------
         elif game_state == "WAITING_FOR_PLAYERS_TO_CONNECT":
@@ -620,6 +642,7 @@ while running:
                         create_ships(ship_count)
                         backend.update_ship_count(ship_count)
                         backend.update_game_state("PLACE_SHIPS")
+
             if backend.player_id == player2_id:
                 ship_count = backend.ship_count
                 if ship_count > 0 and ships_selected == False:
@@ -679,7 +702,7 @@ while running:
 
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 # Gate input so only the active player can fire
-                #if backend.your_turn:
+                # if backend.your_turn:
                     # Only allow shots on the opponent grid (top grid)
 
                 for cell in top_grid:
@@ -817,6 +840,10 @@ while running:
 
     elif game_state == "WAITING_FOR_PLAYERS_TO_CONNECT":
         draw_waiting_for_player(f"Waiting for opponent to connect...", opponent_id)
+        
+    elif game_state == "LOADING":
+        draw_loading_circle(loading_angle)
+        loading_angle += 0.1
     
     elif game_state == "SELECT_SHIPS":
         if backend.player_id == player1_id:
