@@ -664,6 +664,8 @@ def receive_multi_bomb(cells):
     results = []
     sunk_ships = []
     sunk_indexes = []
+    
+    anim_play = 0 # Decides which animation to play after a multi-shot as to not play 9 animations
 
     for row, col in cells:
         # If a square was already attacked before, record it as a repeat
@@ -688,6 +690,8 @@ def receive_multi_bomb(cells):
             sunk = check_ship_sunk(ship_index)
 
             if sunk:
+                if anim_play < 3:
+                    anim_play = 3
                 # Convert that whole ship from X to D to show it is sunk.
                 sink_own_ship(ship_index)
 
@@ -696,6 +700,9 @@ def receive_multi_bomb(cells):
                 if ship_index not in sunk_indexes:
                     sunk_indexes.append(ship_index)
                     sunk_ships.append(get_ship_coords(ship_index))
+            else:
+                if anim_play < 2:
+                    anim_play = 2
 
             results.append({
                 "row": row,
@@ -704,6 +711,8 @@ def receive_multi_bomb(cells):
             })
 
         else:
+            if anim_play < 1:
+                anim_play = 1
             # Mark misses on the defending board.
             grid[row][col] = "O"
             shots_received_miss.append((row,col))
@@ -712,6 +721,8 @@ def receive_multi_bomb(cells):
                 "col": col,
                 "status": "miss"
             })
+
+    add_animation(anim_play, cells[1], 2)
 
     # After all 3x3 cells are processed, check if the defender has lost.
     all_sunk = all_ships_sunk()
@@ -755,18 +766,24 @@ def handle_hit_status(status, row, col, sunk, ship_coords, all_sunk):
 def handle_multi_bomb_result(results, sunk_ships, all_sunk):
     # This function runs on the attacking player's side.
     # It updates the attacker's target grid using the combined 3x3 result.
+    anim_play = 0
+
     for result in results:
         row = result["row"]
         col = result["col"]
         status = result["status"]
 
         if status == "hit":
+            if anim_play < 2:
+                anim_play = 2
             # Record this square as a successful hit on the opponent board.
             if (row, col) not in shots_sent_hit:
                 shots_sent_hit.append((row,col))
             target_grid[row][col] = "X"
 
         elif status == "miss":
+            if anim_play < 1:
+                anim_play = 1
             # Record this square as a miss on the opponent board.
             if (row, col) not in shots_sent_miss:
                 shots_sent_miss.append((row,col))
@@ -776,6 +793,14 @@ def handle_multi_bomb_result(results, sunk_ships, all_sunk):
     # mark all of those ship coordinates as D on the target grid.
     for ship_coords in sunk_ships:
         sink_opp_ship(ship_coords)
+    
+    if len(sunk_ships) > 0:
+        anim_play = 3
+
+    top_r = results[1]
+    r = top_r["row"]
+    c = top_r["col"]
+    add_animation(anim_play,(r,c),1)
 
 # Helper: hit counts per ship
 def ship_hit_counts():
