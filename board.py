@@ -936,19 +936,18 @@ while running:
         draw_waiting_for_player(f"Player {opponent_id} is still placing their ships", opponent_id)
 
     elif game_state == "RUNNING_GAME":
-        if animation_playing == False:
-            draw_clear_screen(screen)
+        draw_clear_screen(screen)
 
-            draw_coordinates(GRID_PADDING, top_grid_y)
-            draw_coordinates(GRID_PADDING, bottom_grid_y)
-            for cell in all_cells:
-                cell.draw(screen, mouse_pos)
-            
-            # Draw backend ships and hit/miss overlays on bottom grid
-            draw_backend_ships()
-            draw_multi_bomb_preview(mouse_pos)
-            draw_status_panel()
-            draw_marks()
+        draw_coordinates(GRID_PADDING, top_grid_y)
+        draw_coordinates(GRID_PADDING, bottom_grid_y)
+        for cell in all_cells:
+            cell.draw(screen, mouse_pos)
+        
+        # Draw backend ships and hit/miss overlays on bottom grid
+        draw_backend_ships()
+        draw_multi_bomb_preview(mouse_pos)
+        draw_status_panel()
+        draw_marks()
 
         # Draw animation if there are any queued
         if len(backend.animations) > 0:
