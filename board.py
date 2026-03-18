@@ -52,7 +52,9 @@ clock = pygame.time.Clock()
 
 # ------------------ ANIMATIONS ------------------
 animations = [] # Stores active animations
-font_big = pygame.font.SysFont("arial", 60, bold=True)
+animation_playing = False
+animation_font = pygame.font.SysFont("arial", 20, bold=True)
+animation_font_outline = pygame.font.SysFont("arial", 26, bold=True)
 
 # ------------------ CELL CLASS ------------------
 class Cell:
@@ -573,50 +575,74 @@ def draw_lock_button(mouse_pos):
     screen.blit(text, (button_rect.centerx - text.get_width() // 2, button_rect.centery - text.get_height() // 2))
     return button_rect
 
+def draw_clear_screen(screen):
+    screen.fill(BG_COLOR)
+
+def get_cell_pixel(grid_id, row, col):
+    if grid_id == 1:
+        grid_x = GRID_PADDING
+        grid_y = top_grid_y
+    elif grid_id == 2:
+        grid_x = GRID_PADDING
+        grid_y = bottom_grid_y
+    else:
+        raise ValueError("Invalid grid_id")
+
+    x = grid_x + col * CELL_SIZE
+    y = grid_y + row * CELL_SIZE
+
+    return x, y
+
 def draw_animations(screen):
-    """
-    Draws animations on top of the current screen.
-    
-    Args:
-        screen (pygame.Surface): The current display surface.
-        font (pygame.font.Font): The font used to render text.
-    """
-    font = font_big
-    global animations
-    current_time = time.time()
-    fade_duration = 1.5  # seconds
+    global animation_playing
+    duration = 1.2  # seconds
+    text = None
+    animation_playing = True
+    for anim in animations[:]:
+        elapsed = time.time() - anim["start"]
 
-    # We'll remove animations that have expired
-    remaining_animations = []
+        if elapsed > duration:
+            animations.remove(anim)
+            animation_playing = False
+            continue
 
-    for anim in animations:
-        elapsed = current_time - anim['start']
-        if elapsed < fade_duration:
-            # Compute alpha (opacity)
-            alpha = max(0, 255 * (1 - elapsed / fade_duration))
-            
-            # Render the text surface
-            text_surface = font.render("HIT!", True, (255, 0, 0))
-            text_surface.set_alpha(int(alpha))
-            
-            # Calculate top-left from center location
-            text_rect = text_surface.get_rect(center=anim['loc'])
-            
-            # Blit onto the screen
-            screen.blit(text_surface, text_rect)
+        # Determine message + color
+        if anim["type"] == 1:
+            text = "MISS"
+            color = (200, 200, 200)
 
-            # Keep animation in the list
-            remaining_animations.append(anim)
+        elif anim["type"] == 2:
+            text = "HIT!"
+            color = (255, 80, 80)
 
-    # Update global list to remove finished animations
-    animations = remaining_animations
+        elif anim["type"] == 3:
+            text = "SUNK!"
+            color = (255, 200, 50)
+
+        # Animation scaling
+        scale = 1 + (0.5 * (1 - elapsed / duration))
+
+        text_surface = animation_font.render(text, True, color)
+
+        # Scale the text
+        w = int(text_surface.get_width() * scale)
+        h = int(text_surface.get_height() * scale)
+        text_surface = pygame.transform.scale(text_surface, (w, h))
+        
+        loc_x, loc_y = anim["loc"]
+        x, y = get_cell_pixel(anim["board"], loc_x, loc_y)
+        location = (x + CELL_SIZE // 2, y - CELL_SIZE // 2)
+
+        rect = text_surface.get_rect(center=location)
+
+        screen.blit(text_surface, rect)
 
 # ------------------ ANIMATIONS ------------------
-def trigger_animation(num, loc):
-    print("Adding Animation")
+def trigger_animation(num, loc, board):
     animations.append({
         "type": num,
         "loc": loc,
+        "board": board,
         "start": time.time()
     })
 
@@ -750,9 +776,6 @@ while running:
                         multi_bomb_mode = not multi_bomb_mode
                         print(f"MULTI-BOMB MODE: {multi_bomb_mode}")
 
-                if event.key == pygame.K_a:
-                    trigger_animation(1, (WINDOW_WIDTH//2, WINDOW_HEIGHT//2))
-
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 # Gate input so only the active player can fire
                 # if backend.your_turn:
@@ -834,7 +857,7 @@ while running:
                         backend.your_turn = True
                         backend.update_game_state("RUNNING_GAME_SP")
 
-        elif game_state == "RUNNING_GAME_SP":
+        elif game_state == "RUNNING_GAME_SP" and backend.your_turn:
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_m:
                     # Only allow multi-bomb mode if it has not already been used.
@@ -878,19 +901,16 @@ while running:
                                             backend.your_turn = False
                                 break
 
-    if backend.GAME_STATE == "RUNNING_GAME_SP" and not backend.your_turn:
-        pygame.time.wait(500)
-        row, col, hit, sunk, all_sunk = backend.ai_take_turn()
-        if all_sunk:
-            backend.winner = False
-            backend.update_game_state("GAME_OVER")
-        else:
-            backend.your_turn = True
+        elif backend.GAME_STATE == "RUNNING_GAME_SP" and not backend.your_turn:
+            pygame.time.wait(500)
+            row, col, hit, sunk, all_sunk = backend.ai_take_turn()
+            if all_sunk:
+                backend.winner = False
+                backend.update_game_state("GAME_OVER")
+            else:
+                backend.your_turn = True
 
     # ------------------ DRAWING ------------------
-    if len(animations) > 0:
-        draw_animations(screen)
-
     if game_state == "MAIN_MENU":
         draw_main_menu(mouse_pos)
 
@@ -916,17 +936,27 @@ while running:
         draw_waiting_for_player(f"Player {opponent_id} is still placing their ships", opponent_id)
 
     elif game_state == "RUNNING_GAME":
-        screen.fill(BG_COLOR)
-        draw_coordinates(GRID_PADDING, top_grid_y)
-        draw_coordinates(GRID_PADDING, bottom_grid_y)
-        for cell in all_cells:
-            cell.draw(screen, mouse_pos)
-        
-        # Draw backend ships and hit/miss overlays on bottom grid
-        draw_backend_ships()
-        draw_multi_bomb_preview(mouse_pos)
-        draw_status_panel()
-        draw_marks()
+        if animation_playing == False:
+            draw_clear_screen(screen)
+
+            draw_coordinates(GRID_PADDING, top_grid_y)
+            draw_coordinates(GRID_PADDING, bottom_grid_y)
+            for cell in all_cells:
+                cell.draw(screen, mouse_pos)
+            
+            # Draw backend ships and hit/miss overlays on bottom grid
+            draw_backend_ships()
+            draw_multi_bomb_preview(mouse_pos)
+            draw_status_panel()
+            draw_marks()
+
+        # Draw animation if there are any queued
+        if len(backend.animations) > 0:
+            new_animation = backend.remove_animation()
+            print(f"Triggering Animation: {new_animation}")
+            trigger_animation(new_animation["type"], new_animation["loc"], new_animation["board"])
+        if len(animations) > 0:
+            draw_animations(screen)
     
     elif game_state == "GAME_OVER":
         draw_game_over(backend.winner)

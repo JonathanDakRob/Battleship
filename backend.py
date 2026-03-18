@@ -56,11 +56,21 @@ shots_sent_miss = []
 # 1 = miss, 2 = hit, 3 = sunk
 animations = []
 
-def add_animation(num):
-    animations.append(num)
+def add_animation(num, loc, board):
+    # Adds a new animation integer value to the list
+    animations.append({
+        "type": num,
+        "loc": loc,
+        "board": board
+    })
 
 def remove_animation():
-    animations.pop(0)
+    # Removes the next animation in the list and return the integer value
+    if len(animations) > 0:
+        next_animation = animations[0]
+        animations.pop(0)
+        return next_animation
+    return 0
     
 ####################################################################### AI Components #######################################################################################
 import random
@@ -617,17 +627,17 @@ def receive_shot(row, col):
         print(f"Sunk: {sunk}")
         
         if sunk:
-            add_animation(3)
+            add_animation(3, (row,col), 2) # Add sunk animation
             sink_own_ship(ship_index)
             print(f"Ship sunk {row}, {col}")
             ship_coords = get_ship_coords(ship_index)
             all_sunk = all_ships_sunk() # True if we have no ships left
             print("Your ship was sunk!")
         else:
-            add_animation(2)
+            add_animation(2, (row,col), 2) # Add hit animation
             
     else:
-        add_animation(1)
+        add_animation(1, (row,col), 2) # Add miss aniation
         grid[row][col] = "O" # Mark opponent miss on the board
         shots_received_miss.append((row,col))
         print("Opponent missed.")
@@ -722,15 +732,15 @@ def handle_hit_status(status, row, col, sunk, ship_coords, all_sunk):
     if status:
         shots_sent_hit.append(coord)
         if sunk:
-            add_animation(3)# Ship sunk animation
+            add_animation(3, (row,col), 1)# Ship sunk animation
             sink_opp_ship(ship_coords)
             print("You sunk a battleship!")
         else:
-            add_animation(2) # Ship hit animation
+            add_animation(2, (row,col), 1) # Ship hit animation
             target_grid[row][col] = "X"
             print("Your shot hit!")
     else:
-        add_animation(1) # Miss animation
+        add_animation(1, (row,col), 1) # Miss animation
         shots_sent_miss.append(coord)
         target_grid[row][col] = "O"
     
