@@ -52,11 +52,17 @@ shots_received_miss = []
 shots_sent_hit = []
 shots_sent_miss = []
 
+####################################################################### Animation Logging #######################################################################################
+# 1 = miss, 2 = hit, 3 = sunk
+animations = []
 
+def add_animation(num):
+    animations.append(num)
+
+def remove_animation():
+    animations.pop(0)
+    
 ####################################################################### AI Components #######################################################################################
-
-# Coming Soon: AI Components
-
 import random
 
 # AI's own grid and ships (hidden from player)
@@ -465,17 +471,9 @@ def send_bomb(row, col):
         print("BOMB FAILED: Not your turn.")
         return
 
-    # Prevent double-click spam until hit_status arrives.
-    # if pending_shot:
-    #     print("BOMB FAILED: Waiting for shot result.")
-    #     return
-
     if not can_send_bomb(row, col):
         print("BOMB FAILED: Invalid bomb (repeat or out of bounds).")
         return
-
-    # pending_shot = True # Lock out extra shots until result message comes back
-    # your_turn = False # End turn locally; server/game rules can refine later
 
     msg = {
         "type": "bomb",
@@ -597,7 +595,7 @@ def get_num_ships_sunk():
 # Shot Handling (Local)
 def receive_shot(row, col):
     # Applies opponent shot to our grid and sends hit_status back for their UI.
-    global shots_received_hit, shots_received_miss, grid
+    global shots_received_hit, shots_received_miss, grid, animations
 
     if (row, col) in shots_received_hit or (row, col) in shots_received_miss:
         print("Repeat shot received.")
@@ -619,13 +617,17 @@ def receive_shot(row, col):
         print(f"Sunk: {sunk}")
         
         if sunk:
+            add_animation(3)
             sink_own_ship(ship_index)
             print(f"Ship sunk {row}, {col}")
             ship_coords = get_ship_coords(ship_index)
             all_sunk = all_ships_sunk() # True if we have no ships left
             print("Your ship was sunk!")
+        else:
+            add_animation(2)
             
     else:
+        add_animation(1)
         grid[row][col] = "O" # Mark opponent miss on the board
         shots_received_miss.append((row,col))
         print("Opponent missed.")
@@ -714,17 +716,21 @@ def receive_multi_bomb(cells):
     _send(msg)
 
 def handle_hit_status(status, row, col, sunk, ship_coords, all_sunk):
+    global animations
     coord = (row,col)
 
     if status:
         shots_sent_hit.append(coord)
         if sunk:
+            add_animation(3)# Ship sunk animation
             sink_opp_ship(ship_coords)
             print("You sunk a battleship!")
         else:
+            add_animation(2) # Ship hit animation
             target_grid[row][col] = "X"
             print("Your shot hit!")
     else:
+        add_animation(1) # Miss animation
         shots_sent_miss.append(coord)
         target_grid[row][col] = "O"
     

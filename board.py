@@ -6,6 +6,7 @@ import sys
 import os
 import backend
 import math
+import time
 
 # ------------------ CONFIG ------------------
 os.environ['SDL_VIDEO_CENTERED'] = '1' 
@@ -43,13 +44,15 @@ EASY_RECT   = pygame.Rect(WINDOW_WIDTH//2 - 100, WINDOW_HEIGHT//2 - 90, 200, 50)
 MEDIUM_RECT = pygame.Rect(WINDOW_WIDTH//2 - 100, WINDOW_HEIGHT//2 - 20, 200, 50)
 HARD_RECT   = pygame.Rect(WINDOW_WIDTH//2 - 100, WINDOW_HEIGHT//2 + 50, 200, 50)
 
-
-
 # ------------------ INIT ------------------
 pygame.init() # Initialize pygame
 screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
 pygame.display.set_caption("Battleship Game")
 clock = pygame.time.Clock()
+
+# ------------------ ANIMATIONS ------------------
+animations = [] # Stores active animations
+font_big = pygame.font.SysFont("arial", 60, bold=True)
 
 # ------------------ CELL CLASS ------------------
 class Cell:
@@ -570,6 +573,53 @@ def draw_lock_button(mouse_pos):
     screen.blit(text, (button_rect.centerx - text.get_width() // 2, button_rect.centery - text.get_height() // 2))
     return button_rect
 
+def draw_animations(screen):
+    """
+    Draws animations on top of the current screen.
+    
+    Args:
+        screen (pygame.Surface): The current display surface.
+        font (pygame.font.Font): The font used to render text.
+    """
+    font = font_big
+    global animations
+    current_time = time.time()
+    fade_duration = 1.5  # seconds
+
+    # We'll remove animations that have expired
+    remaining_animations = []
+
+    for anim in animations:
+        elapsed = current_time - anim['start']
+        if elapsed < fade_duration:
+            # Compute alpha (opacity)
+            alpha = max(0, 255 * (1 - elapsed / fade_duration))
+            
+            # Render the text surface
+            text_surface = font.render("HIT!", True, (255, 0, 0))
+            text_surface.set_alpha(int(alpha))
+            
+            # Calculate top-left from center location
+            text_rect = text_surface.get_rect(center=anim['loc'])
+            
+            # Blit onto the screen
+            screen.blit(text_surface, text_rect)
+
+            # Keep animation in the list
+            remaining_animations.append(anim)
+
+    # Update global list to remove finished animations
+    animations = remaining_animations
+
+# ------------------ ANIMATIONS ------------------
+def trigger_animation(num, loc):
+    print("Adding Animation")
+    animations.append({
+        "type": num,
+        "loc": loc,
+        "start": time.time()
+    })
+
 # ------------------ START SERVER FUNCTION ------------------
 import threading
 def start_network():
@@ -700,6 +750,9 @@ while running:
                         multi_bomb_mode = not multi_bomb_mode
                         print(f"MULTI-BOMB MODE: {multi_bomb_mode}")
 
+                if event.key == pygame.K_a:
+                    trigger_animation(1, (WINDOW_WIDTH//2, WINDOW_HEIGHT//2))
+
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 # Gate input so only the active player can fire
                 # if backend.your_turn:
@@ -737,7 +790,7 @@ while running:
                     backend.disconnect_from_server()
                     backend.reset_game()
 
-        # ------------------ SINGLE PLAYER STATE ------------------
+        # ======================================== SINGLE PLAYER =======================================
         elif game_state == "SELECT_DIFFICULTY":
             if event.type == pygame.MOUSEBUTTONDOWN:
                 if EASY_RECT.collidepoint(event.pos):
@@ -835,6 +888,9 @@ while running:
             backend.your_turn = True
 
     # ------------------ DRAWING ------------------
+    if len(animations) > 0:
+        draw_animations(screen)
+
     if game_state == "MAIN_MENU":
         draw_main_menu(mouse_pos)
 
@@ -900,7 +956,7 @@ while running:
         draw_backend_ships()
         draw_multi_bomb_preview(mouse_pos)
         draw_status_panel()
-        draw_marks()
+        draw_marks()        
 
     pygame.display.flip()
     clock.tick(60)
