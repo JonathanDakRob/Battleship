@@ -681,12 +681,13 @@ while running:
         # ------------------ MAIN MENU STATE ------------------
         if game_state == "MAIN_MENU":
             if event.type == pygame.MOUSEBUTTONDOWN:
+                # Single player button sets game mode to 1 and moved to the select difficulty stage
                 if SINGLE_PLAYER_RECT.collidepoint(event.pos):
                     reset_local_ui_state()
-                    backend.multi_bomb_used = False
                     backend.update_game_mode(1)
                     backend.update_game_state("SELECT_DIFFICULTY")
 
+                # Multi-player button setes game mode to 2 and waiting for another player to connect
                 if MULTI_PLAYER_RECT.collidepoint(event.pos):
                     backend.update_game_state("LOADING")
                     backend.update_game_mode(2)
@@ -703,104 +704,191 @@ while running:
 
         # ------------------ SHIP SELECTION STATE ------------------
         elif game_state == "SELECT_SHIPS":
-            if backend.player_id == player1_id:
+            # Single player
+            if backend.GAME_MODE == 1:
                 if event.type == pygame.KEYDOWN:
-                    if event.key in [
-                        pygame.K_1,
-                        pygame.K_2,
-                        pygame.K_3,
-                        pygame.K_4,
-                        pygame.K_5,
-                    ]:
+                    if event.key in [pygame.K_1, pygame.K_2, pygame.K_3, pygame.K_4, pygame.K_5]:
                         ship_count = int(event.unicode)
-                        print(f"Selected {ship_count} ships")
-
+                        backend.set_ship_count(ship_count)
                         create_ships(ship_count)
-                        backend.update_ship_count(ship_count)
                         backend.update_game_state("PLACE_SHIPS")
+            
+            # Multi-player
+            elif backend.GAME_MODE == 2:
+                if backend.player_id == player1_id:
+                    if event.type == pygame.KEYDOWN:
+                        if event.key in [pygame.K_1, pygame.K_2, pygame.K_3, pygame.K_4, pygame.K_5]:
+                            ship_count = int(event.unicode)
+                            print(f"Selected {ship_count} ships")
 
-            if backend.player_id == player2_id:
-                ship_count = backend.ship_count
-                if ship_count > 0 and ships_selected == False:
-                    ships_selected = True
-                    print(f"Player {player1_id} selected {ship_count} ships")
-                    print(f"SHIP COUNT: {ship_count}")
-                    create_ships(ship_count)
+                            create_ships(ship_count)
+                            backend.update_ship_count(ship_count)
+                            backend.update_game_state("PLACE_SHIPS")
 
-                    backend.update_game_state("PLACE_SHIPS")
+                if backend.player_id == player2_id:
+                    ship_count = backend.ship_count
+                    if ship_count > 0 and ships_selected == False:
+                        ships_selected = True
+                        print(f"Player {player1_id} selected {ship_count} ships")
+                        print(f"SHIP COUNT: {ship_count}")
+                        create_ships(ship_count)
+
+                        backend.update_game_state("PLACE_SHIPS")
 
         # ------------------ SHIP PLACING STATE ------------------
         elif game_state == "PLACE_SHIPS":
-            for ship in ships:
-                ship.handle_event(event)    
+            # Single player
+            if backend.GAME_MODE == 1:
+                for ship in ships:
+                    ship.handle_event(event)
 
-            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-                if RESET_BUTTON_RECT.collidepoint(event.pos):
-                    print("Resetting Ships...")
-                    # Clear the backend grid
-                    backend.grid = [["." for _ in range(GRID_SIZE)] for _ in range(GRID_SIZE)]
-                    for ship in ships:
+                if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                    if RESET_BUTTON_RECT.collidepoint(event.pos):
+                        backend.grid = [["." for _ in range(GRID_SIZE)] for _ in range(GRID_SIZE)]
                         create_ships(len(ships))
 
-                elif LOCK_BUTTON_RECT.collidepoint(event.pos):
-                    all_valid = all(s.placed for s in ships)
-                    if all_valid:
-                        backend.ships.clear()
-                        for s in ships:
-                            backend.ships.append(backend.compute_ship_cells(s.grid_row, s.grid_col, s.length, s.orientation)) #
-                        backend.submit_placement()
-                        backend.update_game_state("WAITING_FOR_OPPONENT")
+                    elif LOCK_BUTTON_RECT.collidepoint(event.pos):
+                        all_valid = all(s.placed for s in ships)
+                        if all_valid:
+                            backend.ships.clear()
+                            for s in ships:
+                                backend.ships.append(
+                                    backend.compute_ship_cells(s.grid_row, s.grid_col, s.length, s.orientation)
+                            )
+                            backend.ai_place_ships(len(ships))
+                            backend.your_turn = True
+                            backend.update_game_state("RUNNING_GAME")
+
+            # Multi-player    
+            elif backend.GAME_MODE == 2:
+                for ship in ships:
+                    ship.handle_event(event)    
+
+                if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                    if RESET_BUTTON_RECT.collidepoint(event.pos):
+                        print("Resetting Ships...")
+                        # Clear the backend grid
+                        backend.grid = [["." for _ in range(GRID_SIZE)] for _ in range(GRID_SIZE)]
+                        for ship in ships:
+                            create_ships(len(ships))
+
+                    elif LOCK_BUTTON_RECT.collidepoint(event.pos):
+                        all_valid = all(s.placed for s in ships)
+                        if all_valid:
+                            backend.ships.clear()
+                            for s in ships:
+                                backend.ships.append(backend.compute_ship_cells(s.grid_row, s.grid_col, s.length, s.orientation)) #
+                            backend.submit_placement()
+                            backend.update_game_state("WAITING_FOR_OPPONENT")
 
         # ------------------ WAITING FOR OTHER PLAYER STATE ------------------
         elif game_state == "WAITING_FOR_OPPONENT":
+            # Multi-player only
             if backend.all_ships_locked:
                 backend.update_game_state("RUNNING_GAME")
 
         # ------------------ RUNNING GAME STATE ------------------
         elif game_state == "RUNNING_GAME":
-            # Initialize turn rule once when the match begins
-            if not started_running_game:
-                started_running_game = True
-
-                # This gives Player 1 the first move without needing server logic yet.
-                backend.your_turn = (backend.player_id == player1_id)
-
-            if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_m:
-                    # Only allow multibomb mode if it has not already been used.
-                    if backend.multi_bomb_used:
-                        print("MULTI-BOMB already used this game.")
-                        multi_bomb_mode = False
-                    else:
-                        # Press M to toggle multi-bomb mode on or off.
-                        multi_bomb_mode = not multi_bomb_mode
-                        print(f"MULTI-BOMB MODE: {multi_bomb_mode}")
-
-            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-                # Gate input so only the active player can fire
-                # if backend.your_turn:
-                    # Only allow shots on the opponent grid (top grid)
-
-                for cell in top_grid:
-                    if cell.rect.collidepoint(mouse_pos):
-                        cell.handle_click()
-                        click_row, click_col = cell.get_coords()
-
-                        # Can only send bomb if it is your turn
-                        if backend.your_turn:
-                            if multi_bomb_mode:
-                                # If multi-bomb mode is armed, send one 3x3 attack
-                                # instead of a normal single-cell bomb.
-                                print(f"FRONTEND: Sending MULTI-BOMB to {click_row, click_col}")
-                                backend.send_multi_bomb(click_row, click_col)
-
-                                # Turn off the mode after one use so the player must
-                                # intentionally arm it again next time.
+            # Single player
+            if backend.GAME_MODE == 1:
+                if backend.your_turn:
+                    if event.type == pygame.KEYDOWN:
+                        if event.key == pygame.K_m:
+                            # Only allow multi-bomb mode if it has not already been used.
+                            if backend.multi_bomb_used:
+                                print("MULTI-BOMB already used this game.")
                                 multi_bomb_mode = False
                             else:
-                                print(f"FRONTEND: Sending Bomb to {click_row, click_col}")
-                                backend.send_bomb(click_row, click_col)
-                        break
+                                multi_bomb_mode = not multi_bomb_mode
+                                print(f"MULTI-BOMB MODE: {multi_bomb_mode}")
+
+                    if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                        if backend.your_turn:
+                            for cell in top_grid:
+                                if cell.rect.collidepoint(mouse_pos):
+                                    r, c = cell.get_coords()
+
+                                    if multi_bomb_mode:
+                                        print(f"FRONTEND: Sending SINGLE-PLAYER MULTI-BOMB to {(r, c)}")
+                                        used_successfully, all_sunk = backend.player_multi_bomb_ai(r, c)
+
+                                        # Only disable the mode after a successful use.
+                                        if used_successfully:
+                                            multi_bomb_mode = False
+
+                                            if all_sunk:
+                                                backend.winner = True
+                                                backend.update_game_state("GAME_OVER")
+                                            else:
+                                                # Multi-bomb always ends the player's turn in single-player.
+                                                backend.your_turn = False
+                                        break
+
+                                    else:
+                                        if (r, c) not in backend.shots_sent_hit and (r, c) not in backend.shots_sent_miss:
+                                            hit, sunk, all_sunk = backend.player_shoot_ai(r, c)
+                                            if all_sunk:
+                                                backend.winner = True
+                                                backend.update_game_state("GAME_OVER")
+                                            else:
+                                                if not hit:
+                                                    backend.your_turn = False
+                                        break
+
+                elif not backend.your_turn:
+                    pygame.time.wait(500)
+                    row, col, hit, sunk, all_sunk = backend.ai_take_turn()
+                    if all_sunk:
+                        backend.winner = False
+                        backend.update_game_state("GAME_OVER")
+                    else:
+                        backend.your_turn = True
+
+            # Multi-player
+            elif backend.GAME_MODE == 2:
+                # Initialize turn rule once when the match begins
+                if not started_running_game:
+                    started_running_game = True
+
+                    # This gives Player 1 the first move without needing server logic yet.
+                    backend.your_turn = (backend.player_id == player1_id)
+
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_m:
+                        # Only allow multibomb mode if it has not already been used.
+                        if backend.multi_bomb_used:
+                            print("MULTI-BOMB already used this game.")
+                            multi_bomb_mode = False
+                        else:
+                            # Press M to toggle multi-bomb mode on or off.
+                            multi_bomb_mode = not multi_bomb_mode
+                            print(f"MULTI-BOMB MODE: {multi_bomb_mode}")
+
+                if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                    # Gate input so only the active player can fire
+                    # if backend.your_turn:
+                        # Only allow shots on the opponent grid (top grid)
+
+                    for cell in top_grid:
+                        if cell.rect.collidepoint(mouse_pos):
+                            cell.handle_click()
+                            click_row, click_col = cell.get_coords()
+
+                            # Can only send bomb if it is your turn
+                            if backend.your_turn:
+                                if multi_bomb_mode:
+                                    # If multi-bomb mode is armed, send one 3x3 attack
+                                    # instead of a normal single-cell bomb.
+                                    print(f"FRONTEND: Sending MULTI-BOMB to {click_row, click_col}")
+                                    backend.send_multi_bomb(click_row, click_col)
+
+                                    # Turn off the mode after one use so the player must
+                                    # intentionally arm it again next time.
+                                    multi_bomb_mode = False
+                                else:
+                                    print(f"FRONTEND: Sending Bomb to {click_row, click_col}")
+                                    backend.send_bomb(click_row, click_col)
+                            break
 
         # ------------------ GAME OVER STATE ------------------
         elif game_state == "GAME_OVER":
@@ -813,102 +901,21 @@ while running:
                     backend.disconnect_from_server()
                     backend.reset_game()
 
-        # ======================================== SINGLE PLAYER =======================================
+        # ------------------ SELECT DIFFICULTY STATE ------------------
+        # Single player only
         elif game_state == "SELECT_DIFFICULTY":
             if event.type == pygame.MOUSEBUTTONDOWN:
                 if EASY_RECT.collidepoint(event.pos):
                     backend.ai_difficulty = "easy"
-                    backend.update_game_state("SELECT_SHIPS_SP")
+                    backend.update_game_state("SELECT_SHIPS")
         
                 elif MEDIUM_RECT.collidepoint(event.pos):
                     backend.ai_difficulty = "medium"
-                    backend.update_game_state("SELECT_SHIPS_SP")
+                    backend.update_game_state("SELECT_SHIPS")
         
                 elif HARD_RECT.collidepoint(event.pos):
                     backend.ai_difficulty = "hard"
-                    backend.update_game_state("SELECT_SHIPS_SP")
-
-        elif game_state == "SELECT_SHIPS_SP":
-            if event.type == pygame.KEYDOWN:
-                if event.key in [pygame.K_1, pygame.K_2, pygame.K_3, pygame.K_4, pygame.K_5]:
-                    ship_count = int(event.unicode)
-                    backend.set_ship_count(ship_count)
-                    create_ships(ship_count)
-                    backend.update_game_state("PLACE_SHIPS_SP")
-
-        elif game_state == "PLACE_SHIPS_SP":
-            for ship in ships:
-                ship.handle_event(event)
-
-            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-                if RESET_BUTTON_RECT.collidepoint(event.pos):
-                    backend.grid = [["." for _ in range(GRID_SIZE)] for _ in range(GRID_SIZE)]
-                    create_ships(len(ships))
-
-                elif LOCK_BUTTON_RECT.collidepoint(event.pos):
-                    all_valid = all(s.placed for s in ships)
-                    if all_valid:
-                        backend.ships.clear()
-                        for s in ships:
-                            backend.ships.append(
-                                backend.compute_ship_cells(s.grid_row, s.grid_col, s.length, s.orientation)
-                        )
-                        backend.ai_place_ships(len(ships))
-                        backend.your_turn = True
-                        backend.update_game_state("RUNNING_GAME_SP")
-
-        elif game_state == "RUNNING_GAME_SP" and backend.your_turn:
-            if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_m:
-                    # Only allow multi-bomb mode if it has not already been used.
-                    if backend.multi_bomb_used:
-                        print("MULTI-BOMB already used this game.")
-                        multi_bomb_mode = False
-                    else:
-                        multi_bomb_mode = not multi_bomb_mode
-                        print(f"MULTI-BOMB MODE: {multi_bomb_mode}")
-
-            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-                if backend.your_turn:
-                    for cell in top_grid:
-                        if cell.rect.collidepoint(mouse_pos):
-                            r, c = cell.get_coords()
-
-                            if multi_bomb_mode:
-                                print(f"FRONTEND: Sending SINGLE-PLAYER MULTI-BOMB to {(r, c)}")
-                                used_successfully, all_sunk = backend.player_multi_bomb_ai(r, c)
-
-                                # Only disable the mode after a successful use.
-                                if used_successfully:
-                                    multi_bomb_mode = False
-
-                                    if all_sunk:
-                                        backend.winner = True
-                                        backend.update_game_state("GAME_OVER")
-                                    else:
-                                        # Multi-bomb always ends the player's turn in single-player.
-                                        backend.your_turn = False
-                                break
-
-                            else:
-                                if (r, c) not in backend.shots_sent_hit and (r, c) not in backend.shots_sent_miss:
-                                    hit, sunk, all_sunk = backend.player_shoot_ai(r, c)
-                                    if all_sunk:
-                                        backend.winner = True
-                                        backend.update_game_state("GAME_OVER")
-                                    else:
-                                        if not hit:
-                                            backend.your_turn = False
-                                break
-
-        elif backend.GAME_STATE == "RUNNING_GAME_SP" and not backend.your_turn:
-            pygame.time.wait(500)
-            row, col, hit, sunk, all_sunk = backend.ai_take_turn()
-            if all_sunk:
-                backend.winner = False
-                backend.update_game_state("GAME_OVER")
-            else:
-                backend.your_turn = True
+                    backend.update_game_state("SELECT_SHIPS")
 
     # ------------------ DRAWING ------------------
     if game_state == "MAIN_MENU":
@@ -922,40 +929,67 @@ while running:
         loading_angle += 0.1
     
     elif game_state == "SELECT_SHIPS":
-        if backend.player_id == player1_id:
+        # Single player
+        if backend.GAME_MODE == 1:
             draw_ship_selection()
-        if backend.player_id == player2_id:
-            draw_waiting_for_player(f"Player {player1_id} will select 1-5 ships", player1_id)
+        # Multi-player
+        if backend.GAME_MODE == 2:
+            if backend.player_id == player1_id:
+                draw_ship_selection()
+            if backend.player_id == player2_id:
+                draw_waiting_for_player(f"Player {player1_id} will select 1-5 ships", player1_id)
     
     elif game_state == "PLACE_SHIPS":
-        draw_ship_placement()
-        draw_coordinates(GRID_PADDING, GRID_PADDING)
-        draw_control_buttons(mouse_pos)
+        # Single player
+        if backend.GAME_MODE == 1:
+            draw_ship_placement()
+            draw_coordinates(GRID_PADDING, GRID_PADDING)
+            draw_control_buttons(mouse_pos)
+        # Multi-player
+        if backend.GAME_MODE == 2:
+            draw_ship_placement()
+            draw_coordinates(GRID_PADDING, GRID_PADDING)
+            draw_control_buttons(mouse_pos)
     
     elif game_state == "WAITING_FOR_OPPONENT":
+        # Only for multi-player
         draw_waiting_for_player(f"Player {opponent_id} is still placing their ships", opponent_id)
 
     elif game_state == "RUNNING_GAME":
-        draw_clear_screen(screen)
+        # Single player
+        if backend.GAME_MODE == 1:
+            screen.fill(BG_COLOR)
+            draw_coordinates(GRID_PADDING, top_grid_y)
+            draw_coordinates(GRID_PADDING, bottom_grid_y)
+            for cell in all_cells:
+                cell.draw(screen, mouse_pos)
+            draw_backend_ships()
+            draw_multi_bomb_preview(mouse_pos)
+            draw_status_panel()
+            draw_marks() 
 
-        draw_coordinates(GRID_PADDING, top_grid_y)
-        draw_coordinates(GRID_PADDING, bottom_grid_y)
-        for cell in all_cells:
-            cell.draw(screen, mouse_pos)
-        
-        # Draw backend ships and hit/miss overlays on bottom grid
-        draw_backend_ships()
-        draw_multi_bomb_preview(mouse_pos)
-        draw_status_panel()
-        draw_marks()
+        # Multi-player
+        if backend.GAME_MODE == 2:
+            draw_clear_screen(screen)
 
-        # Draw animation if there are any queued
-        if len(backend.animations) > 0:
-            new_animation = backend.remove_animation()
-            print(f"Triggering Animation: {new_animation}")
-            trigger_animation(new_animation["type"], new_animation["loc"], new_animation["board"])
-        if len(animations) > 0:
-            draw_animations(screen)
+            draw_coordinates(GRID_PADDING, top_grid_y)
+            draw_coordinates(GRID_PADDING, bottom_grid_y)
+            for cell in all_cells:
+                cell.draw(screen, mouse_pos)
+            
+            # Draw backend ships and hit/miss overlays on bottom grid
+            draw_backend_ships()
+            draw_multi_bomb_preview(mouse_pos)
+            draw_status_panel()
+            draw_marks()
+
+            # Draw animation if there are any queued
+            if len(backend.animations) > 0:
+                new_animation = backend.remove_animation()
+                print(f"Triggering Animation: {new_animation}")
+                trigger_animation(new_animation["type"], new_animation["loc"], new_animation["board"])
+            if len(animations) > 0:
+                draw_animations(screen)
     
     elif game_state == "GAME_OVER":
         draw_game_over(backend.winner)
@@ -966,26 +1000,7 @@ while running:
         draw_button(mouse_pos)
 
     elif game_state == "SELECT_DIFFICULTY":
-        draw_difficulty_selection(mouse_pos)
-
-    elif game_state == "SELECT_SHIPS_SP":
-        draw_ship_selection()
-
-    elif game_state == "PLACE_SHIPS_SP":
-        draw_ship_placement()
-        draw_coordinates(GRID_PADDING, GRID_PADDING)
-        draw_control_buttons(mouse_pos)
-
-    elif game_state == "RUNNING_GAME_SP":
-        screen.fill(BG_COLOR)
-        draw_coordinates(GRID_PADDING, top_grid_y)
-        draw_coordinates(GRID_PADDING, bottom_grid_y)
-        for cell in all_cells:
-            cell.draw(screen, mouse_pos)
-        draw_backend_ships()
-        draw_multi_bomb_preview(mouse_pos)
-        draw_status_panel()
-        draw_marks()        
+        draw_difficulty_selection(mouse_pos)        
 
     pygame.display.flip()
     clock.tick(60)
