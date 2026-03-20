@@ -317,8 +317,9 @@ def draw_ship_selection():
     title_text = font.render("Select Number of Ships (1 - 5)", True, (255, 255, 255))
     instruction_text = small_font.render("Press a number key 1, 2, 3, 4, or 5", True, (200, 200, 200))
 
-    screen.blit(title_text, (WINDOW_WIDTH // 2 - title_text.get_width() // 2, WINDOW_HEIGHT // 3))
+    screen.blit(title_text, (WINDOW_WIDTH // 2 - title_text.get_width() // 2, (WINDOW_HEIGHT // 2) - (2 * instruction_text.get_height())))
     screen.blit(instruction_text, (WINDOW_WIDTH // 2 - instruction_text.get_width() // 2, WINDOW_HEIGHT // 2))
+
 
     pygame.display.flip()
 
@@ -479,7 +480,7 @@ def draw_backend_ships():
                 pygame.draw.rect(screen, (0, 200, 0), rect)
                 pygame.draw.rect(screen, (50, 50, 50), rect, 2)
 
-def draw_mark_cell(cell_value, origin_y, row, col):
+def draw_mark_cell(cell_value, origin_y, row, col, board):
     # Only draw for hit/miss cells.
     if cell_value not in ("X", "O", "D"):
         return
@@ -495,6 +496,8 @@ def draw_mark_cell(cell_value, origin_y, row, col):
     elif cell_value == "O":
         color = (225, 225, 220)
     elif cell_value == "D":
+        if not animation_exists(4, (row,col), board):
+            trigger_animation(4, (row,col), board)
         color = (125, 40, 40)
     pygame.draw.rect(screen, color, rect)
     pygame.draw.rect(screen, (50, 50, 50), rect, 2)
@@ -503,8 +506,8 @@ def draw_marks():
     # Draw opponent board marks (top) and your board marks (bottom) in one pass.
     for r in range(GRID_SIZE):
         for c in range(GRID_SIZE):
-            draw_mark_cell(backend.target_grid[r][c], top_grid_y, r, c)  # Your shots
-            draw_mark_cell(backend.grid[r][c], bottom_grid_y, r, c)  # Opponent shots
+            draw_mark_cell(backend.target_grid[r][c], top_grid_y, r, c, 1)  # Your shots
+            draw_mark_cell(backend.grid[r][c], bottom_grid_y, r, c, 2)  # Opponent shots
 
 def draw_multi_bomb_preview(mouse_pos):
     # When multi-bomb mode is armed, show the player
@@ -595,18 +598,12 @@ def get_cell_pixel(grid_id, row, col):
 
 def draw_image(screen):
     # Load the image
-    image_path = "bang.png"
-    image = pygame.image.load(image_path).convert_alpha()
+    image_path = None
+    image = None
 
-    # Set your position here
-    x = WINDOW_WIDTH//2  # TODO: set x coordinate
-    y = WINDOW_WIDTH//2  # TODO: set y coordinate
-
-    
-    start_time = time.time()
+    # start_time = anim["start"]
     duration = 1.2  # seconds
 
-    running = True
     for anim in animations[:]:
         elapsed = time.time() - anim["start"]
         
@@ -615,60 +612,109 @@ def draw_image(screen):
             animations.remove(anim)
             continue
 
-        # Handle events (important to prevent freezing)
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                pygame.quit()
-                return
+        anim_type = anim["type"]
+        if anim_type == 1:
+            # Play SPLASH animation
+            image_path = "images\Battleship_Splash.png"
+        if anim_type == 2 or anim_type == 3:
+            # Play BANG animation
+            image_path = "images\Battleship_Bang.png"
+        if anim_type == 4:
+            # Play RISING SMOKE aniation
+            if elapsed < (duration/3):
+                image_path = "images\Battleship_Smoke1.png"
+            elif elapsed < (2* (duration/3)):
+                image_path = "images\Battleship_Smoke2.png"
+            else:
+                image_path = "images\Battleship_Smoke3.png"
+        
+        try:
+            image = pygame.image.load(image_path).convert_alpha()
+                
+            # Get pixel location
+            loc_x, loc_y = anim["loc"]
+            x, y = get_cell_pixel(anim["board"], loc_x, loc_y)
 
-        # Draw image
-        screen.blit(image, (x, y))
+            # Set animation location
+            if anim_type == 1:
+                # Splash animation
+                image = pygame.transform.scale(image, (75, 75))
+                rect = image.get_rect()
+                rect.center = (x+10, y+10) # Centering the image on the cell
+            elif anim_type in (2,3):
+                # Bang animation
+                image = pygame.transform.scale(image, (75, 75))
+                rect = image.get_rect()
+                rect.center = (x+10, y+10)
+            elif anim_type == 4:
+                # Rising smoke animation
+                image = pygame.transform.scale(image, (30, 30))
+                rect = image.get_rect()
+                rect.bottomleft = (x+5, y+CELL_SIZE-5)
+                
+            # Draw image
+            screen.blit(image, rect)
+        except:
+            pass
 
 def draw_animations(screen):
-    global animation_playing
+    """ Retired Function """
+
     duration = 1.2  # seconds
     text = None
-    animation_playing = True
+   
     for anim in animations[:]:
-        elapsed = time.time() - anim["start"]
+        if anim["type"] != 2:
+            elapsed = time.time() - anim["start"]
 
-        if elapsed > duration:
-            animations.remove(anim)
-            animation_playing = False
-            continue
+            if elapsed > duration:
+                animations.remove(anim)
+                continue
 
-        # Determine message + color
-        if anim["type"] == 1:
-            text = "MISS"
-            color = (200, 200, 200)
+            # Determine message + color
+            if anim["type"] == 1:
+                text = "MISS"
+                color = (200, 200, 200)
 
-        elif anim["type"] == 2:
-            text = "HIT!"
-            color = (255, 80, 80)
+            elif anim["type"] == 2:
+                text = "HIT!"
+                color = (255, 80, 80)
 
-        elif anim["type"] == 3:
-            text = "SUNK!"
-            color = (255, 200, 50)
+            elif anim["type"] == 3:
+                text = "SUNK!"
+                color = (255, 200, 50)
 
-        # Animation scaling
-        scale = 1 + (0.5 * (1 - elapsed / duration))
+            # Animation scaling
+            scale = 1 + (0.5 * (1 - elapsed / duration))
 
-        text_surface = animation_font.render(text, True, color)
+            text_surface = animation_font.render(text, True, color)
 
-        # Scale the text
-        w = int(text_surface.get_width() * scale)
-        h = int(text_surface.get_height() * scale)
-        text_surface = pygame.transform.scale(text_surface, (w, h))
-        
-        loc_x, loc_y = anim["loc"]
-        x, y = get_cell_pixel(anim["board"], loc_x, loc_y)
-        location = (x + CELL_SIZE // 2, y - CELL_SIZE // 2)
+            # Scale the text
+            w = int(text_surface.get_width() * scale)
+            h = int(text_surface.get_height() * scale)
+            text_surface = pygame.transform.scale(text_surface, (w, h))
+            
+            loc_x, loc_y = anim["loc"]
+            x, y = get_cell_pixel(anim["board"], loc_x, loc_y)
+            location = (x + CELL_SIZE // 2, y - CELL_SIZE // 2)
 
-        rect = text_surface.get_rect(center=location)
+            rect = text_surface.get_rect(center=location)
 
-        screen.blit(text_surface, rect)
+            screen.blit(text_surface, rect)
+        else:
+            draw_image(screen)
 
 # ------------------ ANIMATIONS ------------------
+def animation_exists(anim_type, loc, board):
+    for anim in animations:
+        if (
+            anim["type"] == anim_type and
+            anim["loc"] == loc and
+            anim["board"] == board
+        ):
+            return True
+    return False
+
 def trigger_animation(num, loc, board):
     animations.append({
         "type": num,
@@ -987,31 +1033,28 @@ while running:
         draw_waiting_for_player(f"Player {opponent_id} is still placing their ships", opponent_id)
 
     elif game_state == "RUNNING_GAME":
+        draw_clear_screen(screen)
+        draw_coordinates(GRID_PADDING, top_grid_y)
+        draw_coordinates(GRID_PADDING, bottom_grid_y)
+        for cell in all_cells:
+            cell.draw(screen, mouse_pos)
+        
         # Single player
         if backend.GAME_MODE == 1:
-            draw_clear_screen(screen)
-            draw_coordinates(GRID_PADDING, top_grid_y)
-            draw_coordinates(GRID_PADDING, bottom_grid_y)
-            for cell in all_cells:
-                cell.draw(screen, mouse_pos)
             draw_backend_ships()
             draw_multi_bomb_preview(mouse_pos)
             draw_status_panel()
             draw_marks() 
 
         # Multi-player
-        if backend.GAME_MODE == 2:
-            draw_clear_screen(screen)
-            draw_coordinates(GRID_PADDING, top_grid_y)
-            draw_coordinates(GRID_PADDING, bottom_grid_y)
-            for cell in all_cells:
-                cell.draw(screen, mouse_pos)
-            
+        if backend.GAME_MODE == 2:            
             # Draw backend ships and hit/miss overlays on bottom grid
             draw_backend_ships()
             draw_multi_bomb_preview(mouse_pos)
             draw_status_panel()
             draw_marks()
+
+        # Add smoking animation
 
         # Draw animation if there are any queued
         if len(backend.animations) > 0:
@@ -1019,7 +1062,7 @@ while running:
             print(f"Triggering Animation: {new_animation}")
             trigger_animation(new_animation["type"], new_animation["loc"], new_animation["board"])
         if len(animations) > 0:
-            draw_animations(screen)
+            draw_image(screen)
     
     elif game_state == "GAME_OVER":
         draw_game_over(backend.winner)
