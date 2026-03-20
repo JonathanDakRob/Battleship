@@ -172,19 +172,25 @@ def ai_take_turn():
     sunk = False
     all_sunk_result = False
     ship_idx = get_ship_index(row, col)
+    anim_val = 0 # Value to queue animation
 
     if hit:
         grid[row][col] = "X"
         shots_received_hit.append((row, col))
         sunk = check_ship_sunk(ship_idx)
         if sunk:
+            anim_val = 3
             sink_own_ship(ship_idx)
             all_sunk_result = all_ships_sunk()
+        else:
+            anim_val = 2
     else:
         grid[row][col] = "O"
         shots_received_miss.append((row, col))
+        anim_val = 1
 
     ai_receive_result(row, col, hit, sunk)
+    add_animation(anim_val, (row, col), 2)
     return row, col, hit, sunk, all_sunk_result
 
 def player_shoot_ai(row, col):
@@ -250,6 +256,7 @@ def player_multi_bomb_ai(center_row, center_col): ##
         return False, False
 
     sunk_ship_indexes = []
+    anime_val = 0 # Used to queue animation
 
     for row, col in cells:
         # Ignore already-targeted cells, but continue processing the rest.
@@ -259,6 +266,7 @@ def player_multi_bomb_ai(center_row, center_col): ##
         hit = (ai_grid[row][col] == "S")
 
         if hit:
+            anim_val = 2
             ai_grid[row][col] = "X"
             shots_sent_hit.append((row, col))
             target_grid[row][col] = "X"
@@ -270,6 +278,7 @@ def player_multi_bomb_ai(center_row, center_col): ##
                         if ship_index not in sunk_ship_indexes:
                             sunk_ship_indexes.append(ship_index)
                             opponent_ships_sunk += 1
+                            anime_val = 3
 
                             for r, c in ship:
                                 ai_grid[r][c] = "D"
@@ -279,13 +288,20 @@ def player_multi_bomb_ai(center_row, center_col): ##
             ai_grid[row][col] = "O"
             shots_sent_miss.append((row, col))
             target_grid[row][col] = "O"
+            anime_val = 1
 
     all_sunk_result = all(
         ai_grid[r][c] == "D"
         for ship in ai_ships
         for r, c in ship
     )
-
+    
+    coord = (0,0)
+    if center_row != 0:
+        coord = (center_row-1,center_col)
+    else:
+        coord = (center_row,center_col)
+    add_animation(anime_val,coord,1)
     multi_bomb_used = True
     print(f"MULTI-BOMB used in single player at center ({center_row}, {center_col})")
     return True, all_sunk_result
