@@ -197,6 +197,7 @@ def player_shoot_ai(row, col):
     hit = (ai_grid[row][col] == "S")
     sunk = False
     all_sunk_result = False
+    anim_val = 0
 
     if hit:
         ai_grid[row][col] = "X"
@@ -212,7 +213,10 @@ def player_shoot_ai(row, col):
                     opponent_ships_sunk += 1
                 break
         if not sunk:
+            anim_val = 2
             target_grid[row][col] = "X"
+        else:
+            anim_val = 3
         # Check if ALL AI ships are sunk
         all_sunk_result = all(
             ai_grid[r][c] == "D"
@@ -220,13 +224,15 @@ def player_shoot_ai(row, col):
             for r, c in ship
         )
     else:
+        anim_val = 1
         ai_grid[row][col] = "O"
         shots_sent_miss.append((row, col))
         target_grid[row][col] = "O"
 
+    add_animation(anim_val, (row,col), 1)
     return hit, sunk, all_sunk_result
 
-def player_multi_bomb_ai(center_row, center_col):
+def player_multi_bomb_ai(center_row, center_col): ##
     """
     Player uses a one-time 3x3 multi-bomb against the AI board.
     Returns (used_successfully, all_sunk_result).

@@ -593,6 +593,37 @@ def get_cell_pixel(grid_id, row, col):
 
     return x, y
 
+def draw_image(screen):
+    # Load the image
+    image_path = "bang.png"
+    image = pygame.image.load(image_path).convert_alpha()
+
+    # Set your position here
+    x = WINDOW_WIDTH//2  # TODO: set x coordinate
+    y = WINDOW_WIDTH//2  # TODO: set y coordinate
+
+    
+    start_time = time.time()
+    duration = 1.2  # seconds
+
+    running = True
+    for anim in animations[:]:
+        elapsed = time.time() - anim["start"]
+        
+        # Stop after duration
+        if elapsed > duration:
+            animations.remove(anim)
+            continue
+
+        # Handle events (important to prevent freezing)
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                return
+
+        # Draw image
+        screen.blit(image, (x, y))
+
 def draw_animations(screen):
     global animation_playing
     duration = 1.2  # seconds
@@ -822,7 +853,7 @@ while running:
                                             else:
                                                 # Multi-bomb always ends the player's turn in single-player.
                                                 backend.your_turn = False
-                                        break
+                                        break ###
 
                                     else:
                                         if (r, c) not in backend.shots_sent_hit and (r, c) not in backend.shots_sent_miss:
@@ -958,7 +989,7 @@ while running:
     elif game_state == "RUNNING_GAME":
         # Single player
         if backend.GAME_MODE == 1:
-            screen.fill(BG_COLOR)
+            draw_clear_screen(screen)
             draw_coordinates(GRID_PADDING, top_grid_y)
             draw_coordinates(GRID_PADDING, bottom_grid_y)
             for cell in all_cells:
@@ -971,7 +1002,6 @@ while running:
         # Multi-player
         if backend.GAME_MODE == 2:
             draw_clear_screen(screen)
-
             draw_coordinates(GRID_PADDING, top_grid_y)
             draw_coordinates(GRID_PADDING, bottom_grid_y)
             for cell in all_cells:
@@ -983,13 +1013,13 @@ while running:
             draw_status_panel()
             draw_marks()
 
-            # Draw animation if there are any queued
-            if len(backend.animations) > 0:
-                new_animation = backend.remove_animation()
-                print(f"Triggering Animation: {new_animation}")
-                trigger_animation(new_animation["type"], new_animation["loc"], new_animation["board"])
-            if len(animations) > 0:
-                draw_animations(screen)
+        # Draw animation if there are any queued
+        if len(backend.animations) > 0:
+            new_animation = backend.remove_animation()
+            print(f"Triggering Animation: {new_animation}")
+            trigger_animation(new_animation["type"], new_animation["loc"], new_animation["board"])
+        if len(animations) > 0:
+            draw_animations(screen)
     
     elif game_state == "GAME_OVER":
         draw_game_over(backend.winner)
