@@ -12,11 +12,11 @@ import time
 os.environ['SDL_VIDEO_CENTERED'] = '1' 
 
 GRID_SIZE = 10
-CELL_SIZE = 20     # Shrinks the squares so the window isn't too tall
+CELL_SIZE = 30     # Shrinks the squares so the window isn't too tall
 LABEL_MARGIN = 20
 GRID_PADDING = 40
-WINDOW_WIDTH = (GRID_SIZE * CELL_SIZE) + (2 * GRID_PADDING) + 150 
-WINDOW_HEIGHT = (GRID_SIZE * CELL_SIZE * 2) + 180
+WINDOW_WIDTH = (GRID_SIZE * CELL_SIZE) + (2 * GRID_PADDING) + 200
+WINDOW_HEIGHT = (GRID_SIZE * CELL_SIZE * 2) + 200
 
 BG_COLOR = (30, 30, 30)
 GRID_COLOR = (200, 200, 200)
@@ -419,7 +419,7 @@ all_cells = top_grid + bottom_grid
 
 # ------------------ COORDINATE DRAWING ------------------
 def draw_coordinates(start_x, start_y):
-    font = pygame.font.SysFont("monospace", 15, bold=True)
+    font = pygame.font.SysFont("monospace", int(CELL_SIZE//1.5), bold=True)
     letters = "ABCDEFGHIJ"
     
     for i in range(GRID_SIZE):
@@ -603,6 +603,7 @@ def draw_image(screen):
 
     # start_time = anim["start"]
     duration = 0.0  # seconds
+    size = CELL_SIZE * 5
 
     for anim in animations[:]:
         anim_type = anim["type"]
@@ -654,7 +655,6 @@ def draw_image(screen):
             # Set animation location
             if anim_type in (1,2,3):
                 # Splash animation
-                size = 75
                 scale = 1.0
                 if elapsed < (duration / 5):
                     scale = 0.9
@@ -672,7 +672,7 @@ def draw_image(screen):
                 rect.center = (x+10, y+10) # Centering the image on the cell
             elif anim_type == 4:
                 # Rising smoke animation
-                image = pygame.transform.scale(image, (30, 30))
+                image = pygame.transform.scale(image, (size//2.5, size//2.5))
                 rect = image.get_rect()
                 rect.bottomleft = (x+5, y+CELL_SIZE-5)
                 
@@ -1017,6 +1017,11 @@ while running:
                 elif HARD_RECT.collidepoint(event.pos):
                     backend.ai_difficulty = "hard"
                     backend.update_game_state("SELECT_SHIPS")
+                
+                elif BUTTON_RECT.collidepoint(event.pos):
+                    backend.update_game_state("MAIN_MENU")
+                    backend.reset_game()
+                    reset_local_ui_state()
 
     # ------------------ DRAWING ------------------
     if game_state == "MAIN_MENU":
@@ -1097,7 +1102,8 @@ while running:
         draw_button(mouse_pos)
 
     elif game_state == "SELECT_DIFFICULTY":
-        draw_difficulty_selection(mouse_pos)        
+        draw_difficulty_selection(mouse_pos)   
+        draw_button(mouse_pos)     
 
     pygame.display.flip()
     clock.tick(60)
