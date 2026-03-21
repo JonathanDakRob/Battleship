@@ -602,28 +602,44 @@ def draw_image(screen):
     image = None
 
     # start_time = anim["start"]
-    duration = 1.2  # seconds
+    duration = 0.0  # seconds
 
     for anim in animations[:]:
+        anim_type = anim["type"]
         elapsed = time.time() - anim["start"]
+
+        if anim_type in (1,2,3):
+            duration = 2.0
+        elif anim_type == 4:
+            duration = 1.2
         
         # Stop after duration
         if elapsed > duration:
             animations.remove(anim)
             continue
 
-        anim_type = anim["type"]
-        if anim_type == 1:
-            # Play SPLASH animation
-            image_path = "images\Battleship_Splash.png"
-        if anim_type == 2 or anim_type == 3:
-            # Play BANG animation
-            image_path = "images\Battleship_Bang.png"
+        if anim_type in (1,2,3):
+            # Play Falling Bomb animation
+            if elapsed < (duration / 5):
+                image_path = "images\Battleship_Bomb1.png"
+            elif elapsed < (2* duration / 5):
+                image_path = "images\Battleship_Bomb2.png"
+            elif elapsed < (3* duration / 5):
+                image_path = "images\Battleship_Bomb3.png"
+            elif elapsed < (4* duration / 5):
+                image_path = "images\Battleship_Bomb4.png"
+            else:
+                if anim_type == 1:
+                    # Play Splash animation
+                    image_path = "images\Battleship_Splash.png"
+                else:
+                    # Play Bang animation
+                    image_path = "images\Battleship_Bang.png"     
         if anim_type == 4:
             # Play RISING SMOKE aniation
             if elapsed < (duration/3):
                 image_path = "images\Battleship_Smoke1.png"
-            elif elapsed < (2* (duration/3)):
+            elif elapsed < (2* duration/3):
                 image_path = "images\Battleship_Smoke2.png"
             else:
                 image_path = "images\Battleship_Smoke3.png"
@@ -636,16 +652,24 @@ def draw_image(screen):
             x, y = get_cell_pixel(anim["board"], loc_x, loc_y)
 
             # Set animation location
-            if anim_type == 1:
+            if anim_type in (1,2,3):
                 # Splash animation
-                image = pygame.transform.scale(image, (75, 75))
+                size = 75
+                scale = 1.0
+                if elapsed < (duration / 5):
+                    scale = 0.9
+                elif elapsed < (2* duration / 5):
+                    scale = 0.8
+                elif elapsed < (3* duration / 5):
+                    scale = 0.7
+                elif elapsed < (4* duration / 5):
+                    scale = 0.6
+                else:
+                    scale = 1.0
+
+                image = pygame.transform.scale(image, (size*scale,size*scale))
                 rect = image.get_rect()
                 rect.center = (x+10, y+10) # Centering the image on the cell
-            elif anim_type in (2,3):
-                # Bang animation
-                image = pygame.transform.scale(image, (75, 75))
-                rect = image.get_rect()
-                rect.center = (x+10, y+10)
             elif anim_type == 4:
                 # Rising smoke animation
                 image = pygame.transform.scale(image, (30, 30))
