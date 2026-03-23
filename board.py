@@ -7,6 +7,7 @@ import os
 import backend
 import math
 import time
+import random
 
 # ------------------ CONFIG ------------------
 os.environ['SDL_VIDEO_CENTERED'] = '1' 
@@ -194,10 +195,21 @@ def create_ships(num_ships):
 
 def reset_local_ui_state():
     global ships_selected, started_running_game, multi_bomb_mode, ships
+    global match_start_time, turn_start_time, current_match_time_left, current_turn_time_left
+    global turn_timeout_sent, last_turn_state, ai_turn_due_time
+
     ships_selected = False
     started_running_game = False
     multi_bomb_mode = False
     ships.clear()
+
+    match_start_time = None
+    turn_start_time = None
+    current_match_time_left = backend.MATCH_TIME_LIMIT
+    current_turn_time_left = backend.TURN_TIME_LIMIT
+    turn_timeout_sent = False
+    last_turn_state = None
+    ai_turn_due_time = None
 
 '''
 PyGame Drawing Functions:
@@ -549,8 +561,11 @@ def draw_status_panel():
     lines = [
         f"Player: {player_label}",
         f"Your turn: {backend.your_turn}",
+        f"Match time: {format_seconds(current_match_time_left)}",
+        f"Turn time: {format_seconds(current_turn_time_left)}",
         f"Multi-bomb: {multi_bomb_status}",
         f"Press M: Toggle",
+        f"AI multi-bomb used: {backend.ai_multi_bomb_used}",
         f"Ships sunk: {backend.get_num_ships_sunk()}/{len(backend.ships)}",
         f"Enemy ships sunk: {backend.opponent_ships_sunk}/{len(backend.ships)}",
         f"Shots hit: {len(backend.shots_sent_hit)}",
@@ -577,6 +592,133 @@ def draw_lock_button(mouse_pos):
     text = font.render("LOCK SHIPS", True, (255, 255, 255))
     screen.blit(text, (button_rect.centerx - text.get_width() // 2, button_rect.centery - text.get_height() // 2))
     return button_rect
+
+def format_seconds(seconds):
+    seconds = max(0, int(seconds))
+    mins = seconds // 60
+    secs = seconds % 60
+    return f"{mins:02d}:{secs:02d}"
+
+def draw_time_ran_out(winner):
+    screen.fill(BG_COLOR)
+
+    font = pygame.font.SysFont(None, 34)
+    small_font = pygame.font.SysFont(None, 22)
+
+    title = font.render("TIME RAN OUT", True, (255, 255, 255))
+
+    if winner is True:
+        subtitle = small_font.render("You were ahead on ships sunk.", True, (180, 180, 180))
+    elif winner is False:
+        subtitle = small_font.render("You were behind on ships sunk.", True, (180, 180, 180))
+    else:
+        subtitle = small_font.render("The match ends in a draw.", True, (180, 180, 180))
+
+    screen.blit(
+        title,
+        (WINDOW_WIDTH // 2 - title.get_width() // 2,
+         WINDOW_HEIGHT // 2 - title.get_height())
+    )
+
+    screen.blit(
+        subtitle,
+        (WINDOW_WIDTH // 2 - subtitle.get_width() // 2,
+         WINDOW_HEIGHT // 2 + 12)
+    )
+
+def start_game_timers():
+    global match_start_time, turn_start_time
+    global current_match_time_left, current_turn_time_left
+    global turn_timeout_sent, last_turn_state
+
+    now = time.monotonic()
+    match_start_time = now
+    turn_start_time = now
+    current_match_time_left = backend.MATCH_TIME_LIMIT
+    current_turn_time_left = backend.TURN_TIME_LIMIT
+    turn_timeout_sent = False
+    last_turn_state = backend.your_turn
+
+def reset_turn_timer():
+    global turn_start_time, current_turn_time_left
+    global turn_timeout_sent, last_turn_state
+
+    turn_start_time = time.monotonic()
+    current_turn_time_left = backend.TURN_TIME_LIMIT
+    turn_timeout_sent = False
+    last_turn_state = backend.your_turn
+
+def get_timeout_winner_id():
+    # Decide winner based on ships sunk when the whole match timer expires.
+    player_ships_sunk = backend.get_num_ships_sunk()
+    enemy_ships_sunk = backend.opponent_ships_sunk
+
+    # If player sank more enemy ships, player wins.
+    if enemy_ships_sunk > player_ships_sunk:
+        if backend.GAME_MODE == 1:
+            return 1 # single-player: player wins
+        return backend.player_id
+
+    # If more of your own ships were sunk, player loses.
+    if enemy_ships_sunk < player_ships_sunk:
+        if backend.GAME_MODE == 1:
+            return 2 # single-player: AI wins
+        return opponent_id
+
+    return 0 # draw
+
+def update_running_game_timers():
+    global current_match_time_left, current_turn_time_left
+    global turn_timeout_sent, last_turn_state, multi_bomb_mode
+
+    if match_start_time is None:
+        return
+
+    now = time.monotonic()
+
+    # Whole-game timer
+    current_match_time_left = max(
+        0,
+        backend.MATCH_TIME_LIMIT - int(now - match_start_time)
+    )
+
+    # Reset the turn timer whenever the turn changes
+    if last_turn_state is None or backend.your_turn != last_turn_state:
+        reset_turn_timer()
+
+    # Per-turn timer
+    if turn_start_time is not None:
+        current_turn_time_left = max(
+            0,
+            backend.TURN_TIME_LIMIT - int(now - turn_start_time)
+        )
+
+    # Whole match timed out
+    if current_match_time_left <= 0 and backend.GAME_STATE == "RUNNING_GAME":
+        winner_id = get_timeout_winner_id()
+        multi_bomb_mode = False
+
+        if backend.GAME_MODE == 2:
+            backend.send_time_ran_out(winner_id)
+
+        backend.handle_time_ran_out(winner_id)
+        return
+
+    # Turn timed out
+    if current_turn_time_left <= 0 and backend.GAME_STATE == "RUNNING_GAME":
+        multi_bomb_mode = False
+
+        # Single-player: just lose the turn
+        if backend.GAME_MODE == 1:
+            if backend.your_turn:
+                backend.your_turn = False
+                reset_turn_timer()
+
+        # Multiplayer: notify server once and wait for change_turn
+        elif backend.GAME_MODE == 2:
+            if backend.your_turn and not turn_timeout_sent:
+                backend.send_turn_timeout()
+                turn_timeout_sent = True
 
 def draw_clear_screen(screen):
     screen.fill(BG_COLOR)
@@ -765,10 +907,21 @@ ships_selected = False # Used to move on from ship selection stage
 started_running_game = False # True if the game has fully started
 multi_bomb_mode = False
 game_mode = 0
+ai_turn_due_time = None
+
+# ------------------ TIMER STATE ------------------
+match_start_time = None
+turn_start_time = None
+last_turn_state = None
+turn_timeout_sent = False
+
+current_match_time_left = backend.MATCH_TIME_LIMIT
+current_turn_time_left = backend.TURN_TIME_LIMIT
 
 # ------------------------------------ GAMEPLAY LOOP ------------------------------------
 while running:
     mouse_pos = pygame.mouse.get_pos()
+    game_state = backend.GAME_STATE
     
     if backend.player_id != None:
         opponent_id = (backend.player_id % 2) + 1
@@ -890,6 +1043,16 @@ while running:
 
         # ------------------ RUNNING GAME STATE ------------------
         elif game_state == "RUNNING_GAME":
+            # Start match / turn timers once when gameplay begins.
+            if not started_running_game:
+                started_running_game = True
+
+                if backend.GAME_MODE == 2:
+                    # Player 1 starts in multiplayer
+                    backend.your_turn = (backend.player_id == player1_id)
+
+                start_game_timers()
+
             # Single player
             if backend.GAME_MODE == 1:
                 if backend.your_turn:
@@ -936,23 +1099,14 @@ while running:
                                                     backend.your_turn = False
                                         break
 
-                elif not backend.your_turn:
-                    pygame.time.wait(500)
-                    row, col, hit, sunk, all_sunk = backend.ai_take_turn()
-                    if all_sunk:
-                        backend.winner = False
-                        backend.update_game_state("GAME_OVER")
-                    else:
-                        backend.your_turn = True
-
             # Multi-player
             elif backend.GAME_MODE == 2:
                 # Initialize turn rule once when the match begins
-                if not started_running_game:
-                    started_running_game = True
+                # if not started_running_game:
+                    # started_running_game = True
 
                     # This gives Player 1 the first move without needing server logic yet.
-                    backend.your_turn = (backend.player_id == player1_id)
+                    # backend.your_turn = (backend.player_id == player1_id)
 
                 if event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_m:
@@ -991,6 +1145,14 @@ while running:
                                     backend.send_bomb(click_row, click_col)
                             break
 
+        # ------------------ TIME RAN OUT STATE ---------------
+        elif game_state == "TIME_RAN_OUT":
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                if BUTTON_RECT.collidepoint(mouse_pos):
+                    backend.disconnect_from_server()
+                    backend.reset_game()
+                    reset_local_ui_state()
+
         # ------------------ GAME OVER STATE ------------------
         elif game_state == "GAME_OVER":
             if event.type == pygame.MOUSEBUTTONDOWN:
@@ -1022,6 +1184,39 @@ while running:
                     backend.update_game_state("MAIN_MENU")
                     backend.reset_game()
                     reset_local_ui_state()
+
+    # ------------------ TIMER UPDATES ------------------
+    if backend.GAME_STATE == "RUNNING_GAME":
+        update_running_game_timers()
+        game_state = backend.GAME_STATE
+
+    # ------------------ SINGLE PLAYER AI AUTO-TURN ------------------
+    if backend.GAME_STATE == "RUNNING_GAME" and backend.GAME_MODE == 1:
+        if not backend.your_turn:
+            # Start a random AI delay so the AI does not always move instantly
+            if ai_turn_due_time is None:
+                ai_delay = backend.get_ai_move_delay()
+                ai_turn_due_time = time.monotonic() + ai_delay
+
+            elif time.monotonic() >= ai_turn_due_time:
+                # Give the AI a random chance to use this one-time multi-bomb
+                if backend.ai_should_use_multi_bomb():
+                    center_row, center_col, all_sunk = backend.ai_take_multi_bomb_turn()
+                    print(f"AI multi-bombed around ({center_row}, {center_col})")
+                else:
+                    row, col, hit, sunk, all_sunk = backend.ai_take_turn()
+
+                if all_sunk:
+                    backend.winner = False
+                    backend.update_game_state("GAME_OVER")
+                else:
+                    backend.your_turn = True
+                    reset_turn_timer()
+
+                ai_turn_due_time = None
+        else:
+            # If it is the player's turn again, clear any pending AI move
+            ai_turn_due_time = None
 
     # ------------------ DRAWING ------------------
     if game_state == "MAIN_MENU":
@@ -1092,11 +1287,15 @@ while running:
             trigger_animation(new_animation["type"], new_animation["loc"], new_animation["board"])
         if len(animations) > 0:
             draw_image(screen)
-    
+
+    elif game_state == "TIME_RAN_OUT":
+        draw_time_ran_out(backend.winner)
+        draw_button(mouse_pos, color=(0,255,0), text="Main Menu")
+
     elif game_state == "GAME_OVER":
         draw_game_over(backend.winner)
         draw_button(mouse_pos, color=(0,255,0), text="Main Menu")
-    
+
     elif game_state == "SINGLE_PLAYER":
         draw_message("Single player construction in progress")
         draw_button(mouse_pos)

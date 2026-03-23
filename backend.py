@@ -36,6 +36,10 @@ ships_locked = False
 all_ships_locked = False
 opponent_ships_sunk = 0
 multi_bomb_used = False # True after the player uses their one multibomb for this game
+# Time Config
+MATCH_TIME_LIMIT = 180 # 3 minutes total match time
+TURN_TIME_LIMIT = 15 # 15 seconds per turn
+time_ran_out = False
 
 # Game mode: Single or Multi-player
 # Single Player: 1
@@ -86,6 +90,8 @@ ai_tried = set()        # Every cell the AI has already shot
 
 # Difficulty: "easy", "medium", "hard"
 ai_difficulty = "medium"
+ai_multi_bomb_used = False
+AI_MULTI_BOMB_CHANCE = 0.25 # 25% chance to use multi-bomb on an AI turn
 
 def ai_place_ships(count):
     """Randomly place AI ships on ai_grid."""
@@ -192,6 +198,59 @@ def ai_take_turn():
     ai_receive_result(row, col, hit, sunk)
     add_animation(anim_val, (row, col), 2)
     return row, col, hit, sunk, all_sunk_result
+
+def ai_take_multi_bomb_turn():
+    """
+    AI uses a one-time 3x3 multi-bomb on the player's board.
+    Returns (center_row, center_col, all_sunk_result).
+    """
+    global ai_multi_bomb_used
+
+    # Pick the center of the multi-bomb using the existing AI targeting logic
+    center_row, center_col = ai_pick_shot()
+    cells = compute_multi_bomb_cells(center_row, center_col)
+
+    anim_val = 0
+    sunk_indexes = []
+
+    for row, col in cells:
+        # Skip cells the AI already attacked before
+        if (row, col) in ai_tried:
+            continue
+
+        ai_tried.add((row, col))
+        hit = (grid[row][col] == "S")
+        ship_idx = get_ship_index(row, col)
+
+        if hit:
+            grid[row][col] = "X"
+            shots_received_hit.append((row, col))
+
+            sunk = check_ship_sunk(ship_idx)
+            if sunk:
+                if ship_idx not in sunk_indexes:
+                    sunk_indexes.append(ship_idx)
+                    sink_own_ship(ship_idx)
+                anim_val = 3
+            else:
+                if anim_val < 2:
+                    anim_val = 2
+        else:
+            grid[row][col] = "O"
+            shots_received_miss.append((row, col))
+            if anim_val < 1:
+                anim_val = 1
+
+    all_sunk_result = all_ships_sunk()
+
+    # Queue one animation for the whole 3x3 attack
+    anchor = cells[0]
+    add_animation(anim_val, anchor, 2)
+
+    ai_multi_bomb_used = True
+    print(f"AI used MULTI-BOMB at center ({center_row}, {center_col})")
+
+    return center_row, center_col, all_sunk_result
 
 def player_shoot_ai(row, col):
     """
@@ -306,26 +365,57 @@ def player_multi_bomb_ai(center_row, center_col): ##
     print(f"MULTI-BOMB used in single player at center ({center_row}, {center_col})")
     return True, all_sunk_result
 
+def ai_should_use_multi_bomb():
+    # AI can only use multi-bomb once per game.
+    if ai_multi_bomb_used:
+        return False
+
+    if ai_difficulty == "easy":
+        chance = 0.10
+    elif ai_difficulty == "medium":
+        chance = 0.20
+    elif ai_difficulty == "hard":
+        chance = 0.35
+    else:
+        chance = 0.20
+
+    return random.random() < chance
+
 def reset_ai():
     """Reset all AI state. Call this inside reset_game()."""
     global ai_grid, ai_ships, ai_mode, ai_hits_pending, ai_tried, ai_difficulty
+    global ai_multi_bomb_used
+
     ai_grid = [["." for _ in range(BOARD_SIZE)] for _ in range(BOARD_SIZE)]
     ai_ships = []
     ai_mode = "hunt"
     ai_hits_pending = []
     ai_tried = set()
     ai_difficulty = "medium"
+    ai_multi_bomb_used = False
+
+def get_ai_move_delay():
+    """
+    Returns a random delay range for the AI based on difficulty.
+    This makes easier AI feel slower and harder AI feel faster.
+    """
+    if ai_difficulty == "easy":
+        return random.uniform(3.5, 6.5)
+    elif ai_difficulty == "medium":
+        return random.uniform(2.0, 4.5)
+    elif ai_difficulty == "hard":
+        return random.uniform(0.8, 2.5)
+
+    # Fallback
+    return random.uniform(2.0, 4.5)
 
 ############################################################################# Server Communication #############################################################################
 sock = None
 
 # Networking Helpers
 def _send(msg):
-    if GAME_MODE == 2:
+    if GAME_MODE == 2 and sock is not None:
         sock.sendall((json.dumps(msg)+ "\n").encode())
-        # print(f"{msg["type"]} message sent")
-    else:
-        print("Cannot send message to server. Game in Single Player Mode")
 
 ############################################################################# Variable Updates #############################################################################
 def update_game_mode(mode):
@@ -339,13 +429,63 @@ def update_game_state(new_state):
     global GAME_STATE
     GAME_STATE = new_state
 
-    # This keeps both clients stage-synced during development.
-    message = {
-        "type": "game_state",
-        "state": GAME_STATE,
-        "sender": player_id # Sender
-    }
-    _send(message)
+    # Only send state updates to the server in multiplayer mode
+    if GAME_MODE == 2 and sock is not None:
+        message = {
+            "type": "game_state",
+            "state": GAME_STATE,
+            "sender": player_id # Sender
+        }
+        _send(message)
+
+def send_turn_timeout():
+    # Multiplayer only: tell the server this player's turn expired.
+    if GAME_MODE == 2:
+        msg = {
+            "type": "turn_timeout",
+            "player": player_id,
+        }
+        _send(msg)
+
+def send_time_ran_out(winner_id):
+    # Multiplayer only: tell the server the whole match timer expired.
+    if GAME_MODE == 2:
+        msg = {
+            "type": "time_ran_out",
+            "winner": winner_id,
+        }
+        _send(msg)
+
+def handle_time_ran_out(winner_id):
+    # Move the game into the timeout screen and record the result.
+    global GAME_STATE, winner, time_ran_out, player_id
+
+    GAME_STATE = "TIME_RAN_OUT"
+    time_ran_out = True
+
+    # winner_id == 0 means draw
+    if winner_id == 0:
+        winner = None
+        print("TIME RAN OUT! DRAW.")
+        return
+
+    # Single-player uses 1 = player win, 2 = AI win
+    if GAME_MODE == 1:
+        if winner_id == 1:
+            winner = True
+            print("TIME RAN OUT! YOU WIN ON SCORE.")
+        else:
+            winner = False
+            print("TIME RAN OUT! YOU LOSE ON SCORE.")
+        return
+
+    # Multiplayer compares to local player_id
+    if winner_id == player_id:
+        winner = True
+        print("TIME RAN OUT! YOU WIN ON SCORE.")
+    else:
+        winner = False
+        print("TIME RAN OUT! YOU LOSE ON SCORE.")
 
 ############################################################################# Pre-game Functions #############################################################################
 # Utility Functions
@@ -488,7 +628,7 @@ def can_send_multi_bomb(cells):
     for row, col in cells:
         if (row, col) not in shots_sent_hit and (row, col) not in shots_sent_miss:
             return True
-        return False
+    return False
 
 def send_bomb(row, col):
     global your_turn, GAME_STATE
@@ -850,7 +990,7 @@ def reset_game():
     global grid, target_grid, ships, player_id, winner, opponent_ships_sunk, sock
     global shots_received_hit, shots_received_miss, shots_sent_hit, shots_sent_miss
     global ship_count, your_turn, GAME_STATE, GAME_MODE, multi_bomb_used
-    global ships_locked, all_ships_locked
+    global ships_locked, all_ships_locked, time_ran_out
 
     grid = [["." for _ in range(BOARD_SIZE)] for _ in range(BOARD_SIZE)]
     target_grid = [["." for _ in range(BOARD_SIZE)] for _ in range(BOARD_SIZE)]
@@ -869,6 +1009,7 @@ def reset_game():
     ship_count = 0
     your_turn = False
     multi_bomb_used = False
+    time_ran_out = False
 
     GAME_MODE = 0
     GAME_STATE = "MAIN_MENU"
@@ -952,6 +1093,10 @@ def handle_server_message(message):
     elif mtype == "game_over":
         winner_id = message["winner"]
         handle_game_over(winner_id)
+
+    elif mtype == "time_ran_out":
+        winner_id = message["winner"]
+        handle_time_ran_out(winner_id)
 
     else:
         print(f"Unknown Message: {message}")
