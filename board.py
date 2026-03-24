@@ -28,6 +28,7 @@ SHIP_COLOR = (180, 180, 180)
 SHIP_PADDING = 20
 SHIP_BLOCK_SIZE = CELL_SIZE
 
+# UI Rects
 LOCK_BUTTON_RECT = pygame.Rect(WINDOW_WIDTH // 2 - 90, WINDOW_HEIGHT - 50, 80, 30)
 RESET_BUTTON_RECT = pygame.Rect(WINDOW_WIDTH // 2 + 10, WINDOW_HEIGHT - 50, 80, 30)
 
@@ -44,6 +45,16 @@ BUTTON_RECT = pygame.Rect(WINDOW_WIDTH//2 - button_rect_width//2,
 EASY_RECT   = pygame.Rect(WINDOW_WIDTH//2 - 100, WINDOW_HEIGHT//2 - 90, 200, 50)
 MEDIUM_RECT = pygame.Rect(WINDOW_WIDTH//2 - 100, WINDOW_HEIGHT//2 - 20, 200, 50)
 HARD_RECT   = pygame.Rect(WINDOW_WIDTH//2 - 100, WINDOW_HEIGHT//2 + 50, 200, 50)
+
+TURN_TIME_LIMIT = 30 # Seconds per turn
+match_timer_rect_width = 80
+match_timer_rect_height = 30
+MATCH_TIMER_RECT = pygame.Rect(WINDOW_WIDTH//2 - match_timer_rect_width//2,
+                          WINDOW_HEIGHT - (match_timer_rect_height + 20),
+                          match_timer_rect_width,
+                          match_timer_rect_height)
+# To trigger the time out screen, set this value to the current time (time.monotonic())
+time_out_start = -1.0
 
 # ------------------ INIT ------------------
 pygame.init() # Initialize pygame
@@ -194,19 +205,19 @@ def create_ships(num_ships):
         ships_start_y += (ship_length * CELL_SIZE) + 10
 
 def reset_local_ui_state():
-    global ships_selected, started_running_game, multi_bomb_mode, ships
-    global match_start_time, turn_start_time, current_match_time_left, current_turn_time_left
+    global ships_selected, started_running_game, multi_bomb_mode, ships, game_mode
+    global match_start_time, turn_start_time, current_turn_time_left
     global turn_timeout_sent, last_turn_state, ai_turn_due_time
 
     ships_selected = False
     started_running_game = False
     multi_bomb_mode = False
+    game_mode = 0
     ships.clear()
 
     match_start_time = None
     turn_start_time = None
-    current_match_time_left = backend.MATCH_TIME_LIMIT
-    current_turn_time_left = backend.TURN_TIME_LIMIT
+    current_turn_time_left = TURN_TIME_LIMIT
     turn_timeout_sent = False
     last_turn_state = None
     ai_turn_due_time = None
@@ -217,8 +228,8 @@ The following functions use PyGame to draw the frontend/UI of the game.
 They are called during the main gameplay loop and draw things depending on the Game State.
 '''
 def draw_main_menu(mouse_pos):
-    font = pygame.font.SysFont(None, 60)
-    button_font = pygame.font.SysFont(None, 40)
+    font = pygame.font.Font("fonts\\PressStart2P-Regular.ttf", 45)
+    button_font = pygame.font.Font("fonts\\PressStart2P-Regular.ttf", 20)
 
     # single_rect = pygame.Rect(WINDOW_WIDTH//2 - 150, WINDOW_HEIGHT//2 - 80, 300, 60)
     # multi_rect = pygame.Rect(WINDOW_WIDTH//2 - 150, WINDOW_HEIGHT//2 + 20, 300, 60)
@@ -255,9 +266,9 @@ def draw_main_menu(mouse_pos):
 
 def draw_difficulty_selection(mouse_pos):
     screen.fill(BG_COLOR)
-    font       = pygame.font.SysFont(None, 40)
-    btn_font   = pygame.font.SysFont(None, 32)
-    title      = font.render("Select Difficulty", True, (255, 255, 255))
+    font = pygame.font.Font("fonts\\PressStart2P-Regular.ttf", 30)
+    btn_font = pygame.font.Font("fonts\\PressStart2P-Regular.ttf", 20)
+    title = font.render("Select Difficulty", True, (255, 255, 255))
     screen.blit(title, (WINDOW_WIDTH//2 - title.get_width()//2, WINDOW_HEIGHT//4))
 
     for rect, label, base_color in [
@@ -282,7 +293,7 @@ def draw_message(message):
          WINDOW_HEIGHT // 2 - title.get_height())
     )
 
-def draw_button(mouse_pos, text="Back", color=(180, 50, 50), border_rad=0):
+def draw_button(mouse_pos, text="BACK", color=(180, 50, 50), border_rad=0):
     font = pygame.font.SysFont(None, 20)
 
     # Draw button
@@ -323,8 +334,8 @@ def draw_waiting_for_player(message, number=0):
 def draw_ship_selection():
     screen.fill(BG_COLOR)
 
-    font = pygame.font.SysFont(None, 32)
-    small_font = pygame.font.SysFont(None, 24)
+    font = pygame.font.Font("fonts\\PressStart2P-Regular.ttf", 15)
+    small_font = pygame.font.Font("fonts\\PressStart2P-Regular.ttf", 10)
 
     title_text = font.render("Select Number of Ships (1 - 5)", True, (255, 255, 255))
     instruction_text = small_font.render("Press a number key 1, 2, 3, 4, or 5", True, (200, 200, 200))
@@ -554,18 +565,16 @@ def draw_status_panel():
         multi_bomb_status = "READY"
 
     if backend.GAME_MODE == 2:
-        player_label = str(backend.player_id)
+        player_label = f"Player {str(backend.player_id)}"
     else:
         player_label = "Single Player"
 
     lines = [
-        f"Player: {player_label}",
-        f"Your turn: {backend.your_turn}",
-        f"Match time: {format_seconds(current_match_time_left)}",
-        f"Turn time: {format_seconds(current_turn_time_left)}",
-        f"Multi-bomb: {multi_bomb_status}",
-        f"Press M: Toggle",
-        f"AI multi-bomb used: {backend.ai_multi_bomb_used}",
+        f"{player_label}",
+        f"{'Your Turn' if backend.your_turn else 'Opponent\'s Turn'}",
+        "",
+        f"Multi-bomb (M): {multi_bomb_status}",
+        "",
         f"Ships sunk: {backend.get_num_ships_sunk()}/{len(backend.ships)}",
         f"Enemy ships sunk: {backend.opponent_ships_sunk}/{len(backend.ships)}",
         f"Shots hit: {len(backend.shots_sent_hit)}",
@@ -573,6 +582,11 @@ def draw_status_panel():
         f"Hits recv: {len(backend.shots_received_hit)}",
         f"Miss recv: {len(backend.shots_received_miss)}",
     ]
+
+    # Timer at the bottom of the screen
+    timer_font = pygame.font.Font("fonts\\PressStart2P-Regular.ttf", 24)
+    timer_surf = timer_font.render(format_seconds(current_turn_time_left), True, (255,255,255))
+    screen.blit(timer_surf, BUTTON_RECT.inflate(12,12))
 
     for i, text in enumerate(lines):
         surf = font.render(text, True, (230, 230, 230))
@@ -599,43 +613,70 @@ def format_seconds(seconds):
     secs = seconds % 60
     return f"{mins:02d}:{secs:02d}"
 
-def draw_time_ran_out(winner):
-    screen.fill(BG_COLOR)
+def draw_text_with_outline(screen, text, font, text_color, outline_color, pos):
+    x, y = pos
 
-    font = pygame.font.SysFont(None, 34)
-    small_font = pygame.font.SysFont(None, 22)
+    # Draw outline
+    for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1),
+                   (-1, -1), (-1, 1), (1, -1), (1, 1)]:
+        outline_surface = font.render(text, True, outline_color)
+        screen.blit(outline_surface, (x + dx, y + dy))
 
-    title = font.render("TIME RAN OUT", True, (255, 255, 255))
+    # Draw main text
+    text_surface = font.render(text, True, text_color)
+    screen.blit(text_surface, (x, y))
 
-    if winner is True:
-        subtitle = small_font.render("You were ahead on ships sunk.", True, (180, 180, 180))
-    elif winner is False:
-        subtitle = small_font.render("You were behind on ships sunk.", True, (180, 180, 180))
+def draw_time_ran_out(lost_turn):
+    # Player ran out of time, other player's turn
+    global time_out_start
+    duration = 1.8 # display message for this many seconds
+    font = pygame.font.Font("fonts\\PressStart2P-Regular.ttf", 38)
+    font.set_bold(True)
+    small_font = pygame.font.Font("fonts\\PressStart2P-Regular.ttf", 22)
+
+    title = font.render("TIME RAN OUT", True, (139, 0, 0))
+    subtitle = None
+
+    elapsed = time.monotonic() - time_out_start
+    print (f"DRAW_TIME_RAN_OUT: {elapsed} elapsed")
+
+    if (elapsed <= duration):
+
+        if lost_turn:
+            subtitle = "Lost your turn"
+            subtitle_render = small_font.render(subtitle, True, (180, 180, 180))
+            
+        else:
+            subtitle = "Your turn now"
+            subtitle_render = small_font.render(subtitle, True, (180, 180, 180))
+            
+        draw_text_with_outline(screen,
+                               "TIME RAN OUT", # Text
+                               font, # Font
+                               (255, 102, 102), # Text Color
+                               (0, 0, 0), # Outline Color
+                               (WINDOW_WIDTH // 2 - title.get_width() // 2, WINDOW_HEIGHT // 2 - title.get_height()) # Position
+        )
+
+        draw_text_with_outline(screen,
+                               subtitle, # Text
+                               small_font, # Font
+                               (255, 255, 255), # Text Color
+                               (0, 0, 0), # Outline Color
+                               (WINDOW_WIDTH // 2 - subtitle_render.get_width() // 2, WINDOW_HEIGHT // 2 + 12) # Position
+        ) 
+
     else:
-        subtitle = small_font.render("The match ends in a draw.", True, (180, 180, 180))
-
-    screen.blit(
-        title,
-        (WINDOW_WIDTH // 2 - title.get_width() // 2,
-         WINDOW_HEIGHT // 2 - title.get_height())
-    )
-
-    screen.blit(
-        subtitle,
-        (WINDOW_WIDTH // 2 - subtitle.get_width() // 2,
-         WINDOW_HEIGHT // 2 + 12)
-    )
+        time_out_start = -1.0 # No 'time ran out' to display
 
 def start_game_timers():
     global match_start_time, turn_start_time
-    global current_match_time_left, current_turn_time_left
+    global current_turn_time_left
     global turn_timeout_sent, last_turn_state
 
     now = time.monotonic()
     match_start_time = now
     turn_start_time = now
-    current_match_time_left = backend.MATCH_TIME_LIMIT
-    current_turn_time_left = backend.TURN_TIME_LIMIT
     turn_timeout_sent = False
     last_turn_state = backend.your_turn
 
@@ -644,7 +685,7 @@ def reset_turn_timer():
     global turn_timeout_sent, last_turn_state
 
     turn_start_time = time.monotonic()
-    current_turn_time_left = backend.TURN_TIME_LIMIT
+    current_turn_time_left = TURN_TIME_LIMIT
     turn_timeout_sent = False
     last_turn_state = backend.your_turn
 
@@ -668,19 +709,13 @@ def get_timeout_winner_id():
     return 0 # draw
 
 def update_running_game_timers():
-    global current_match_time_left, current_turn_time_left
+    global  current_turn_time_left, time_out_start
     global turn_timeout_sent, last_turn_state, multi_bomb_mode
 
     if match_start_time is None:
         return
 
     now = time.monotonic()
-
-    # Whole-game timer
-    current_match_time_left = max(
-        0,
-        backend.MATCH_TIME_LIMIT - int(now - match_start_time)
-    )
 
     # Reset the turn timer whenever the turn changes
     if last_turn_state is None or backend.your_turn != last_turn_state:
@@ -690,28 +725,18 @@ def update_running_game_timers():
     if turn_start_time is not None:
         current_turn_time_left = max(
             0,
-            backend.TURN_TIME_LIMIT - int(now - turn_start_time)
+            TURN_TIME_LIMIT - int(now - turn_start_time)
         )
 
-    # Whole match timed out
-    if current_match_time_left <= 0 and backend.GAME_STATE == "RUNNING_GAME":
-        winner_id = get_timeout_winner_id()
-        multi_bomb_mode = False
-
-        if backend.GAME_MODE == 2:
-            backend.send_time_ran_out(winner_id)
-
-        backend.handle_time_ran_out(winner_id)
-        return
-
     # Turn timed out
-    if current_turn_time_left <= 0 and backend.GAME_STATE == "RUNNING_GAME":
+    if current_turn_time_left <= 0:
         multi_bomb_mode = False
 
         # Single-player: just lose the turn
         if backend.GAME_MODE == 1:
             if backend.your_turn:
                 backend.your_turn = False
+                time_out_start = time.monotonic()
                 reset_turn_timer()
 
         # Multiplayer: notify server once and wait for change_turn
@@ -738,6 +763,7 @@ def get_cell_pixel(grid_id, row, col):
 
     return x, y
 
+# ------------------ ANIMATIONS ------------------
 def draw_image(screen):
     # Load the image
     image_path = None
@@ -749,7 +775,7 @@ def draw_image(screen):
 
     for anim in animations[:]:
         anim_type = anim["type"]
-        elapsed = time.time() - anim["start"]
+        elapsed = time.monotonic() - anim["start"]
 
         if anim_type in (1,2,3):
             duration = 2.0
@@ -758,26 +784,29 @@ def draw_image(screen):
         
         # Stop after duration
         if elapsed > duration:
+            backend.set_wait_for_animation(False)
             animations.remove(anim)
             continue
 
         if anim_type in (1,2,3):
             # Play Falling Bomb animation
+            backend.set_wait_for_animation(True) # Wait for animation to finish before next shot/turn
             if elapsed < (duration / 5):
-                image_path = "images\Battleship_Bomb1.png"
+                image_path = "images\\Battleship_Bomb1.png"
             elif elapsed < (2* duration / 5):
-                image_path = "images\Battleship_Bomb2.png"
+                image_path = "images\\Battleship_Bomb2.png"
             elif elapsed < (3* duration / 5):
-                image_path = "images\Battleship_Bomb3.png"
+                image_path = "images\\Battleship_Bomb3.png"
             elif elapsed < (4* duration / 5):
-                image_path = "images\Battleship_Bomb4.png"
+                image_path = "images\\Battleship_Bomb4.png"
             else:
                 if anim_type == 1:
                     # Play Splash animation
                     image_path = "images\Battleship_Splash.png"
                 else:
                     # Play Bang animation
-                    image_path = "images\Battleship_Bang.png"     
+                    image_path = "images\Battleship_Bang.png"
+
         if anim_type == 4:
             # Play RISING SMOKE aniation
             if elapsed < (duration/3):
@@ -823,54 +852,6 @@ def draw_image(screen):
         except:
             pass
 
-def draw_animations(screen):
-    """ Retired Function """
-
-    duration = 1.2  # seconds
-    text = None
-   
-    for anim in animations[:]:
-        if anim["type"] != 2:
-            elapsed = time.time() - anim["start"]
-
-            if elapsed > duration:
-                animations.remove(anim)
-                continue
-
-            # Determine message + color
-            if anim["type"] == 1:
-                text = "MISS"
-                color = (200, 200, 200)
-
-            elif anim["type"] == 2:
-                text = "HIT!"
-                color = (255, 80, 80)
-
-            elif anim["type"] == 3:
-                text = "SUNK!"
-                color = (255, 200, 50)
-
-            # Animation scaling
-            scale = 1 + (0.5 * (1 - elapsed / duration))
-
-            text_surface = animation_font.render(text, True, color)
-
-            # Scale the text
-            w = int(text_surface.get_width() * scale)
-            h = int(text_surface.get_height() * scale)
-            text_surface = pygame.transform.scale(text_surface, (w, h))
-            
-            loc_x, loc_y = anim["loc"]
-            x, y = get_cell_pixel(anim["board"], loc_x, loc_y)
-            location = (x + CELL_SIZE // 2, y - CELL_SIZE // 2)
-
-            rect = text_surface.get_rect(center=location)
-
-            screen.blit(text_surface, rect)
-        else:
-            draw_image(screen)
-
-# ------------------ ANIMATIONS ------------------
 def animation_exists(anim_type, loc, board):
     for anim in animations:
         if (
@@ -886,7 +867,7 @@ def trigger_animation(num, loc, board):
         "type": num,
         "loc": loc,
         "board": board,
-        "start": time.time()
+        "start": time.monotonic()
     })
 
 # ------------------ START SERVER FUNCTION ------------------
@@ -914,9 +895,6 @@ match_start_time = None
 turn_start_time = None
 last_turn_state = None
 turn_timeout_sent = False
-
-current_match_time_left = backend.MATCH_TIME_LIMIT
-current_turn_time_left = backend.TURN_TIME_LIMIT
 
 # ------------------------------------ GAMEPLAY LOOP ------------------------------------
 while running:
@@ -1056,6 +1034,9 @@ while running:
             # Single player
             if backend.GAME_MODE == 1:
                 if backend.your_turn:
+                    # If it is the player's turn again, clear any pending AI move
+                    ai_turn_due_time = None
+
                     if event.type == pygame.KEYDOWN:
                         if event.key == pygame.K_m:
                             # Only allow multi-bomb mode if it has not already been used.
@@ -1067,7 +1048,7 @@ while running:
                                 print(f"MULTI-BOMB MODE: {multi_bomb_mode}")
 
                     if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-                        if backend.your_turn:
+                        if backend.your_turn and not backend.wait_for_animation:
                             for cell in top_grid:
                                 if cell.rect.collidepoint(mouse_pos):
                                     r, c = cell.get_coords()
@@ -1098,6 +1079,28 @@ while running:
                                                 if not hit:
                                                     backend.your_turn = False
                                         break
+                else:
+                    # Start a random AI delay so the AI does not always move instantly
+                    if ai_turn_due_time is None:
+                        ai_delay = backend.get_ai_move_delay()
+                        ai_turn_due_time = time.monotonic() + ai_delay
+
+                    elif time.monotonic() >= ai_turn_due_time and not backend.wait_for_animation:
+                        # Give the AI a random chance to use this one-time multi-bomb
+                        if backend.ai_should_use_multi_bomb():
+                            center_row, center_col, all_sunk = backend.ai_take_multi_bomb_turn()
+                            print(f"AI multi-bombed around ({center_row}, {center_col})")
+                        else:
+                            row, col, hit, sunk, all_sunk = backend.ai_take_turn()
+
+                        if all_sunk:
+                            backend.winner = False
+                            backend.update_game_state("GAME_OVER")
+                        else:
+                            backend.your_turn = True
+                            reset_turn_timer()
+
+                        ai_turn_due_time = None
 
             # Multi-player
             elif backend.GAME_MODE == 2:
@@ -1157,12 +1160,9 @@ while running:
         elif game_state == "GAME_OVER":
             if event.type == pygame.MOUSEBUTTONDOWN:
                 if BUTTON_RECT.collidepoint(mouse_pos):
-                    ships_selected = False
-                    started_running_game = False
-                    multi_bomb_mode = False
-                    game_mode = 0
                     backend.disconnect_from_server()
                     backend.reset_game()
+                    reset_local_ui_state()
 
         # ------------------ SELECT DIFFICULTY STATE ------------------
         # Single player only
@@ -1184,39 +1184,6 @@ while running:
                     backend.update_game_state("MAIN_MENU")
                     backend.reset_game()
                     reset_local_ui_state()
-
-    # ------------------ TIMER UPDATES ------------------
-    if backend.GAME_STATE == "RUNNING_GAME":
-        update_running_game_timers()
-        game_state = backend.GAME_STATE
-
-    # ------------------ SINGLE PLAYER AI AUTO-TURN ------------------
-    if backend.GAME_STATE == "RUNNING_GAME" and backend.GAME_MODE == 1:
-        if not backend.your_turn:
-            # Start a random AI delay so the AI does not always move instantly
-            if ai_turn_due_time is None:
-                ai_delay = backend.get_ai_move_delay()
-                ai_turn_due_time = time.monotonic() + ai_delay
-
-            elif time.monotonic() >= ai_turn_due_time:
-                # Give the AI a random chance to use this one-time multi-bomb
-                if backend.ai_should_use_multi_bomb():
-                    center_row, center_col, all_sunk = backend.ai_take_multi_bomb_turn()
-                    print(f"AI multi-bombed around ({center_row}, {center_col})")
-                else:
-                    row, col, hit, sunk, all_sunk = backend.ai_take_turn()
-
-                if all_sunk:
-                    backend.winner = False
-                    backend.update_game_state("GAME_OVER")
-                else:
-                    backend.your_turn = True
-                    reset_turn_timer()
-
-                ai_turn_due_time = None
-        else:
-            # If it is the player's turn again, clear any pending AI move
-            ai_turn_due_time = None
 
     # ------------------ DRAWING ------------------
     if game_state == "MAIN_MENU":
@@ -1257,28 +1224,19 @@ while running:
         draw_waiting_for_player(f"Player {opponent_id} is still placing their ships", opponent_id)
 
     elif game_state == "RUNNING_GAME":
+        update_running_game_timers()  
         draw_clear_screen(screen)
         draw_coordinates(GRID_PADDING, top_grid_y)
         draw_coordinates(GRID_PADDING, bottom_grid_y)
         for cell in all_cells:
             cell.draw(screen, mouse_pos)
         
-        # Single player
-        if backend.GAME_MODE == 1:
-            draw_backend_ships()
+        if multi_bomb_mode:
             draw_multi_bomb_preview(mouse_pos)
-            draw_status_panel()
-            draw_marks() 
 
-        # Multi-player
-        if backend.GAME_MODE == 2:            
-            # Draw backend ships and hit/miss overlays on bottom grid
-            draw_backend_ships()
-            draw_multi_bomb_preview(mouse_pos)
-            draw_status_panel()
-            draw_marks()
-
-        # Add smoking animation
+        draw_backend_ships()
+        draw_status_panel()
+        draw_marks() 
 
         # Draw animation if there are any queued
         if len(backend.animations) > 0:
@@ -1287,10 +1245,20 @@ while running:
             trigger_animation(new_animation["type"], new_animation["loc"], new_animation["board"])
         if len(animations) > 0:
             draw_image(screen)
+        
+        # if backend.time_ran_out > 0:
+        #     time_out_start = time.monotonic()
 
-    elif game_state == "TIME_RAN_OUT":
-        draw_time_ran_out(backend.winner)
-        draw_button(mouse_pos, color=(0,255,0), text="Main Menu")
+        if time_out_start > 0:
+            if backend.GAME_MODE == 1:
+                draw_time_ran_out(True)
+            elif backend.GAME_MODE == 2:
+                draw_time_ran_out(backend.time_ran_out != backend.player_id)
+
+
+    # elif game_state == "TIME_RAN_OUT":
+    #     draw_time_ran_out(backend.winner)
+    #     draw_button(mouse_pos, color=(0,255,0), text="Main Menu")
 
     elif game_state == "GAME_OVER":
         draw_game_over(backend.winner)

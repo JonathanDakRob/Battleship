@@ -37,9 +37,7 @@ all_ships_locked = False
 opponent_ships_sunk = 0
 multi_bomb_used = False # True after the player uses their one multibomb for this game
 # Time Config
-MATCH_TIME_LIMIT = 180 # 3 minutes total match time
-TURN_TIME_LIMIT = 15 # 15 seconds per turn
-time_ran_out = False
+time_ran_out = 0
 
 # Game mode: Single or Multi-player
 # Single Player: 1
@@ -57,9 +55,11 @@ shots_sent_hit = []
 shots_sent_miss = []
 
 ####################################################################### Animation Logging #######################################################################################
-# 1 = miss, 2 = hit, 3 = sunk
+# 1 = miss, 2 = hit, 3 = sunk, 4 = rising smoke
+# loc = (x, y)
+# board = 1 (top board), 2 (bottom board)
 animations = []
-
+wait_for_animation = False
 def add_animation(num, loc, board):
     # Adds a new animation integer value to the list
     animations.append({
@@ -75,6 +75,14 @@ def remove_animation():
         animations.pop(0)
         return next_animation
     return 0
+
+def set_wait_for_animation(wait):
+    global wait_for_animation
+    if wait in (True,False):
+        if wait_for_animation != wait:
+            wait_for_animation = wait
+    else:
+        print("BACKEND: Invalid Wait Value")
     
 ####################################################################### AI Components #######################################################################################
 import random
@@ -295,6 +303,7 @@ def player_shoot_ai(row, col):
         target_grid[row][col] = "O"
 
     add_animation(anim_val, (row,col), 1)
+
     return hit, sunk, all_sunk_result
 
 def player_multi_bomb_ai(center_row, center_col): ##
@@ -400,14 +409,14 @@ def get_ai_move_delay():
     This makes easier AI feel slower and harder AI feel faster.
     """
     if ai_difficulty == "easy":
-        return random.uniform(3.5, 6.5)
+        return random.uniform(1.0, 3.0)
     elif ai_difficulty == "medium":
-        return random.uniform(2.0, 4.5)
+        return random.uniform(0.75, 2.0)
     elif ai_difficulty == "hard":
-        return random.uniform(0.8, 2.5)
+        return random.uniform(0.1, 0.5)
 
     # Fallback
-    return random.uniform(2.0, 4.5)
+    return 1.0
 
 ############################################################################# Server Communication #############################################################################
 sock = None
@@ -438,6 +447,15 @@ def update_game_state(new_state):
         }
         _send(message)
 
+def set_time_ran_out(p_id):
+    global time_ran_out
+    # p_id represents the player who's turn it is now when a player times out, not the player who timed out
+    # 0 value means no one has timed out
+    if p_id in (0,1,2):
+        time_ran_out = p_id
+    else:
+        print("BACKEND: Invalid ID for time_ran_out")
+
 def send_turn_timeout():
     # Multiplayer only: tell the server this player's turn expired.
     if GAME_MODE == 2:
@@ -447,45 +465,37 @@ def send_turn_timeout():
         }
         _send(msg)
 
-def send_time_ran_out(winner_id):
-    # Multiplayer only: tell the server the whole match timer expired.
+def send_time_ran_out(new_turn):
+    # Multiplayer only: tell the server that time ran out and who's turn it is now (new_turn)
     if GAME_MODE == 2:
         msg = {
             "type": "time_ran_out",
-            "winner": winner_id,
+            "new_turn": new_turn,
         }
         _send(msg)
 
-def handle_time_ran_out(winner_id):
+def handle_time_ran_out(new_turn):
     # Move the game into the timeout screen and record the result.
-    global GAME_STATE, winner, time_ran_out, player_id
-
-    GAME_STATE = "TIME_RAN_OUT"
+    global GAME_STATE, winner, time_ran_out, player_id, your_turn
     time_ran_out = True
 
-    # winner_id == 0 means draw
-    if winner_id == 0:
-        winner = None
-        print("TIME RAN OUT! DRAW.")
-        return
-
     # Single-player uses 1 = player win, 2 = AI win
-    if GAME_MODE == 1:
-        if winner_id == 1:
-            winner = True
-            print("TIME RAN OUT! YOU WIN ON SCORE.")
-        else:
-            winner = False
-            print("TIME RAN OUT! YOU LOSE ON SCORE.")
-        return
+    # if GAME_MODE == 1:
+    #     if new_turn == player_id:
+    #         winner = True
+    #         print("TIME RAN OUT! YOU WIN.")
+    #     else:
+    #         winner = False
+    #         print("TIME RAN OUT! YOU LOSE.")
+    #     return
 
     # Multiplayer compares to local player_id
-    if winner_id == player_id:
-        winner = True
-        print("TIME RAN OUT! YOU WIN ON SCORE.")
+    if new_turn == player_id:
+        your_turn = True
+        set_time_ran_out(player_id)
     else:
-        winner = False
-        print("TIME RAN OUT! YOU LOSE ON SCORE.")
+        your_turn = False
+        set_time_ran_out((player_id % 2)+1)
 
 ############################################################################# Pre-game Functions #############################################################################
 # Utility Functions
