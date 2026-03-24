@@ -58,12 +58,13 @@ shots_sent_miss = []
 # board = 1 (top board), 2 (bottom board)
 animations = []
 wait_for_animation = False
-def add_animation(num, loc, board):
+def add_animation(num, loc, board, multi_bomb=False):
     # Adds a new animation integer value to the list
     animations.append({
         "type": num,
         "loc": loc,
-        "board": board
+        "board": board,
+        "multi_bomb": multi_bomb
     })
 
 def remove_animation():
@@ -97,7 +98,7 @@ ai_tried = set()        # Every cell the AI has already shot
 # Difficulty: "easy", "medium", "hard"
 ai_difficulty = "medium"
 ai_multi_bomb_used = False
-AI_MULTI_BOMB_CHANCE = 0.25 # 25% chance to use multi-bomb on an AI turn
+AI_MULTI_BOMB_CHANCE = 0.1 # Chance to use multi-bomb on an AI turn
 
 def ai_place_ships(count):
     """Randomly place AI ships on ai_grid."""
@@ -252,8 +253,7 @@ def ai_take_multi_bomb_turn():
     all_sunk_result = all_ships_sunk()
 
     # Queue one animation for the whole 3x3 attack
-    anchor = cells[0]
-    add_animation(anim_val, anchor, 2)
+    add_animation(anim_val, (center_row,center_col), 2, multi_bomb=True)
 
     ai_multi_bomb_used = True
     print(f"AI used MULTI-BOMB at center ({center_row}, {center_col})")
@@ -324,7 +324,7 @@ def player_multi_bomb_ai(center_row, center_col): ##
         return False, False
 
     sunk_ship_indexes = []
-    anime_val = 0 # Used to queue animation
+    anim_val = 0 # Used to queue animation
 
     for row, col in cells:
         # Ignore already-targeted cells, but continue processing the rest.
@@ -334,7 +334,8 @@ def player_multi_bomb_ai(center_row, center_col): ##
         hit = (ai_grid[row][col] == "S")
 
         if hit:
-            anim_val = 2
+            if anim_val < 2:
+                anim_val = 2
             ai_grid[row][col] = "X"
             shots_sent_hit.append((row, col))
             target_grid[row][col] = "X"
@@ -346,7 +347,8 @@ def player_multi_bomb_ai(center_row, center_col): ##
                         if ship_index not in sunk_ship_indexes:
                             sunk_ship_indexes.append(ship_index)
                             opponent_ships_sunk += 1
-                            anime_val = 3
+                            if anim_val < 3:
+                                anim_val = 3
 
                             for r, c in ship:
                                 ai_grid[r][c] = "D"
@@ -356,7 +358,8 @@ def player_multi_bomb_ai(center_row, center_col): ##
             ai_grid[row][col] = "O"
             shots_sent_miss.append((row, col))
             target_grid[row][col] = "O"
-            anime_val = 1
+            if anim_val < 1:
+                anim_val = 1
 
     all_sunk_result = all(
         ai_grid[r][c] == "D"
@@ -364,12 +367,7 @@ def player_multi_bomb_ai(center_row, center_col): ##
         for r, c in ship
     )
     
-    coord = (0,0)
-    if center_row != 0:
-        coord = (center_row-1,center_col)
-    else:
-        coord = (center_row,center_col)
-    add_animation(anime_val,coord,1)
+    add_animation(anim_val, (center_row,center_col), 1, multi_bomb=True)
     multi_bomb_used = True
     print(f"MULTI-BOMB used in single player at center ({center_row}, {center_col})")
     return True, all_sunk_result
@@ -464,7 +462,7 @@ def handle_turn_timeout(p_id):
 
     your_turn = not your_turn
 
-    # Multiplayer only: p_id represents which player timed out
+    # Multiplayer only: p_id represents which player timed outs
     if p_id in (1,2):
         add_animation(5, (-1,-1), p_id)
     else:
@@ -867,7 +865,7 @@ def receive_multi_bomb(cells):
                 "status": "miss"
             })
 
-    add_animation(anim_play, cells[1], 2)
+    add_animation(anim_play, cells[4], 2, multi_bomb=True)
 
     # After all 3x3 cells are processed, check if the defender has lost.
     all_sunk = all_ships_sunk()
@@ -942,10 +940,10 @@ def handle_multi_bomb_result(results, sunk_ships, all_sunk):
     if len(sunk_ships) > 0:
         anim_play = 3
 
-    top_r = results[1]
+    top_r = results[4]
     r = top_r["row"]
     c = top_r["col"]
-    add_animation(anim_play,(r,c),1)
+    add_animation(anim_play,(r,c),1,multi_bomb=True)
 
 # Helper: hit counts per ship
 def ship_hit_counts():

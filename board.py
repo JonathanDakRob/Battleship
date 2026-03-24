@@ -805,19 +805,19 @@ def draw_animation(screen):
             else:
                 if anim_type == 1:
                     # Play Splash animation
-                    image_path = "images\Battleship_Splash.png"
+                    image_path = "images\\Battleship_Splash.png"
                 else:
                     # Play Bang animation
-                    image_path = "images\Battleship_Bang.png"
+                    image_path = "images\\Battleship_Bang.png"
 
         if anim_type == 4:
             # Play RISING SMOKE aniation
             if elapsed < (duration/3):
-                image_path = "images\Battleship_Smoke1.png"
+                image_path = "images\\Battleship_Smoke1.png"
             elif elapsed < (2* duration/3):
-                image_path = "images\Battleship_Smoke2.png"
+                image_path = "images\\Battleship_Smoke2.png"
             else:
-                image_path = "images\Battleship_Smoke3.png"
+                image_path = "images\\Battleship_Smoke3.png"
         
         if anim_type == 5:
             # board argument represents the player_id who timed out
@@ -839,16 +839,21 @@ def draw_animation(screen):
             if anim_type in (1,2,3):
                 # Splash animation
                 scale = 1.0
+                if anim["multi_bomb"]:
+                    scale = 2.3
                 if elapsed < (duration / 5):
-                    scale = 0.9
+                    scale = scale*0.9
                 elif elapsed < (2* duration / 5):
-                    scale = 0.8
+                    scale = scale*0.8
                 elif elapsed < (3* duration / 5):
-                    scale = 0.7
+                    scale = scale*0.7
                 elif elapsed < (4* duration / 5):
-                    scale = 0.6
+                    scale = scale*0.6
                 else:
-                    scale = 1.0
+                    if anim["multi_bomb"]:
+                        scale = 2.3
+                    else:
+                        scale = 1.0
 
                 image = pygame.transform.scale(image, (size*scale,size*scale))
                 rect = image.get_rect()
@@ -874,11 +879,12 @@ def animation_exists(anim_type, loc, board):
             return True
     return False
 
-def trigger_animation(num, loc, board):
+def trigger_animation(num, loc, board, multi_bomb=False):
     animations.append({
         "type": num,
         "loc": loc,
         "board": board,
+        "multi_bomb": multi_bomb,
         "start": time.monotonic()
     })
 
@@ -1302,18 +1308,9 @@ while running:
         if len(backend.animations) > 0:
             new_animation = backend.remove_animation()
             print(f"Triggering Animation: {new_animation}")
-            trigger_animation(new_animation["type"], new_animation["loc"], new_animation["board"])
+            trigger_animation(new_animation["type"], new_animation["loc"], new_animation["board"], new_animation["multi_bomb"])
         if len(animations) > 0:
             draw_animation(screen)
-        
-        # if backend.time_ran_out > 0:
-        #     time_out_start = time.monotonic()
-
-        # if time_out_start > 0:
-        #     if backend.GAME_MODE == 1:
-        #         trigger_animation(5, (-1,-1), 1) # Time out animation (no loc)
-        #     elif backend.GAME_MODE == 2:
-        #         draw_time_ran_out(backend.time_ran_out != backend.player_id)
 
     elif game_state == "GAME_OVER":
         draw_game_over(backend.winner)
