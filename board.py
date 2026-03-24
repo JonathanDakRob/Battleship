@@ -47,6 +47,7 @@ MEDIUM_RECT = pygame.Rect(WINDOW_WIDTH//2 - 100, WINDOW_HEIGHT//2 - 20, 200, 50)
 HARD_RECT   = pygame.Rect(WINDOW_WIDTH//2 - 100, WINDOW_HEIGHT//2 + 50, 200, 50)
 
 TURN_TIME_LIMIT = 30 # Seconds per turn
+current_turn_time_left = TURN_TIME_LIMIT
 match_timer_rect_width = 80
 match_timer_rect_height = 30
 MATCH_TIMER_RECT = pygame.Rect(WINDOW_WIDTH//2 - match_timer_rect_width//2,
@@ -65,8 +66,6 @@ clock = pygame.time.Clock()
 # ------------------ ANIMATIONS ------------------
 animations = [] # Stores active animations
 animation_playing = False
-animation_font = pygame.font.SysFont("arial", 20, bold=True)
-animation_font_outline = pygame.font.SysFont("arial", 26, bold=True)
 
 # ------------------ CELL CLASS ------------------
 class Cell:
@@ -284,7 +283,7 @@ def draw_difficulty_selection(mouse_pos):
 
 def draw_message(message):
     screen.fill(BG_COLOR)
-    font = pygame.font.SysFont(None, 30)
+    font = pygame.font.Font("fonts\\PressStart2P-Regular.ttf", 30)
     title = font.render(message,True,(255,255,255))
 
     screen.blit(
@@ -310,8 +309,8 @@ def draw_button(mouse_pos, text="BACK", color=(180, 50, 50), border_rad=0):
 def draw_waiting_for_player(message, number=0):
     screen.fill(BG_COLOR)
 
-    font = pygame.font.SysFont(None, 30)
-    small_font = pygame.font.SysFont(None, 20)
+    font = pygame.font.Font("fonts\\PressStart2P-Regular.ttf", 20)
+    small_font = pygame.font.Font("fonts\\PressStart2P-Regular.ttf", 12)
     
     if number == 0:
         title = font.render(f"Waiting for Other Player...", True, (255, 255, 255))
@@ -349,8 +348,8 @@ def draw_ship_selection():
 def draw_game_over(winner):
     screen.fill(BG_COLOR)
 
-    font = pygame.font.SysFont(None, 30)
-    small_font = pygame.font.SysFont(None, 20)
+    font = pygame.font.Font("fonts\\PressStart2P-Regular.ttf", 30)
+    small_font = pygame.font.Font("fonts\\PressStart2P-Regular.ttf", 20)
 
     title = title = font.render(f"GAME OVER", True, (255, 255, 255))
     subtitle = ""
@@ -736,10 +735,10 @@ def update_running_game_timers():
         if backend.GAME_MODE == 1:
             if backend.your_turn:
                 backend.your_turn = False
-                time_out_start = time.monotonic()
+                trigger_animation(5, (-1,-1), 1)
                 reset_turn_timer()
 
-        # Multiplayer: notify server once and wait for change_turn
+        # Multiplayer: notify server
         elif backend.GAME_MODE == 2:
             if backend.your_turn and not turn_timeout_sent:
                 backend.send_turn_timeout()
@@ -764,7 +763,9 @@ def get_cell_pixel(grid_id, row, col):
     return x, y
 
 # ------------------ ANIMATIONS ------------------
-def draw_image(screen):
+def draw_animation(screen):
+    global time_out_start
+    
     # Load the image
     image_path = None
     image = None
@@ -781,6 +782,8 @@ def draw_image(screen):
             duration = 2.0
         elif anim_type == 4:
             duration = 1.2
+        elif anim_type == 5:
+            duration = 1.8
         
         # Stop after duration
         if elapsed > duration:
@@ -815,6 +818,15 @@ def draw_image(screen):
                 image_path = "images\Battleship_Smoke2.png"
             else:
                 image_path = "images\Battleship_Smoke3.png"
+        
+        if anim_type == 5:
+            # board argument represents the player_id who timed out
+            if anim["board"] in (1,2):
+                draw_time_ran_out(anim["board"] == backend.player_id)
+                time_out_start = anim["start"]
+            else:
+                print("ERROR: Animation 5 value error")
+            break
         
         try:
             image = pygame.image.load(image_path).convert_alpha()
@@ -1185,10 +1197,10 @@ while running:
                     backend.reset_game()
                     reset_local_ui_state()
 
-    # ------------------ TIMER UPDATES ------------------
-    if backend.GAME_STATE == "RUNNING_GAME":
-        update_running_game_timers()
-        game_state = backend.GAME_STATE
+    # # ------------------ TIMER UPDATES ------------------
+    # if backend.GAME_STATE == "RUNNING_GAME":
+    #     update_running_game_timers()
+    #     game_state = backend.GAME_STATE
 
     # ------------------ SINGLE PLAYER AI AUTO-TURN ------------------
     if backend.GAME_STATE == "RUNNING_GAME" and backend.GAME_MODE == 1:
@@ -1292,21 +1304,16 @@ while running:
             print(f"Triggering Animation: {new_animation}")
             trigger_animation(new_animation["type"], new_animation["loc"], new_animation["board"])
         if len(animations) > 0:
-            draw_image(screen)
+            draw_animation(screen)
         
         # if backend.time_ran_out > 0:
         #     time_out_start = time.monotonic()
 
-        if time_out_start > 0:
-            if backend.GAME_MODE == 1:
-                draw_time_ran_out(True)
-            elif backend.GAME_MODE == 2:
-                draw_time_ran_out(backend.time_ran_out != backend.player_id)
-
-
-    # elif game_state == "TIME_RAN_OUT":
-    #     draw_time_ran_out(backend.winner)
-    #     draw_button(mouse_pos, color=(0,255,0), text="Main Menu")
+        # if time_out_start > 0:
+        #     if backend.GAME_MODE == 1:
+        #         trigger_animation(5, (-1,-1), 1) # Time out animation (no loc)
+        #     elif backend.GAME_MODE == 2:
+        #         draw_time_ran_out(backend.time_ran_out != backend.player_id)
 
     elif game_state == "GAME_OVER":
         draw_game_over(backend.winner)

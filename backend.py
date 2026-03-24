@@ -36,8 +36,6 @@ ships_locked = False
 all_ships_locked = False
 opponent_ships_sunk = 0
 multi_bomb_used = False # True after the player uses their one multibomb for this game
-# Time Config
-time_ran_out = 0
 
 # Game mode: Single or Multi-player
 # Single Player: 1
@@ -449,55 +447,28 @@ def update_game_state(new_state):
         }
         _send(message)
 
-def set_time_ran_out(p_id):
-    global time_ran_out
-    # p_id represents the player who's turn it is now when a player times out, not the player who timed out
-    # 0 value means no one has timed out
-    if p_id in (0,1,2):
-        time_ran_out = p_id
-    else:
-        print("BACKEND: Invalid ID for time_ran_out")
-
 def send_turn_timeout():
     # Multiplayer only: tell the server this player's turn expired.
     if GAME_MODE == 2:
         msg = {
             "type": "turn_timeout",
-            "player": player_id,
+            "player_id": player_id,
         }
         _send(msg)
-
-def send_time_ran_out(new_turn):
-    # Multiplayer only: tell the server that time ran out and who's turn it is now (new_turn)
-    if GAME_MODE == 2:
-        msg = {
-            "type": "time_ran_out",
-            "new_turn": new_turn,
-        }
-        _send(msg)
-
-def handle_time_ran_out(new_turn):
-    # Move the game into the timeout screen and record the result.
-    global GAME_STATE, winner, time_ran_out, player_id, your_turn
-    time_ran_out = True
-
-    # Single-player uses 1 = player win, 2 = AI win
-    # if GAME_MODE == 1:
-    #     if new_turn == player_id:
-    #         winner = True
-    #         print("TIME RAN OUT! YOU WIN.")
-    #     else:
-    #         winner = False
-    #         print("TIME RAN OUT! YOU LOSE.")
-    #     return
-
-    # Multiplayer compares to local player_id
-    if new_turn == player_id:
-        your_turn = True
-        set_time_ran_out(player_id)
     else:
-        your_turn = False
-        set_time_ran_out((player_id % 2)+1)
+        print("BACKEND: Invalid Game Mode for Turn Timeout message")
+
+def handle_turn_timeout(p_id):
+    # Move the game into the timeout screen and record the result.
+    global your_turn, player_id
+
+    your_turn = not your_turn
+
+    # Multiplayer only: p_id represents which player timed out
+    if p_id in (1,2):
+        add_animation(5, (-1,-1), p_id)
+    else:
+        print("BACKEND: Invalid Time Out Player ID")
 
 ############################################################################# Pre-game Functions #############################################################################
 # Utility Functions
@@ -1002,7 +973,7 @@ def reset_game():
     global grid, target_grid, ships, player_id, winner, opponent_ships_sunk, sock
     global shots_received_hit, shots_received_miss, shots_sent_hit, shots_sent_miss
     global ship_count, your_turn, GAME_STATE, GAME_MODE, multi_bomb_used
-    global ships_locked, all_ships_locked, time_ran_out
+    global ships_locked, all_ships_locked
 
     grid = [["." for _ in range(BOARD_SIZE)] for _ in range(BOARD_SIZE)]
     target_grid = [["." for _ in range(BOARD_SIZE)] for _ in range(BOARD_SIZE)]
@@ -1021,7 +992,6 @@ def reset_game():
     ship_count = 0
     your_turn = False
     multi_bomb_used = False
-    time_ran_out = False
 
     GAME_MODE = 0
     GAME_STATE = "MAIN_MENU"
@@ -1106,9 +1076,9 @@ def handle_server_message(message):
         winner_id = message["winner"]
         handle_game_over(winner_id)
 
-    elif mtype == "time_ran_out":
-        winner_id = message["winner"]
-        handle_time_ran_out(winner_id)
+    elif mtype == "turn_timeout":
+        p_id = message["player_id"]
+        handle_turn_timeout(p_id)
 
     else:
         print(f"Unknown Message: {message}")

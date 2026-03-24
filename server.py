@@ -93,23 +93,18 @@ def handle_message(conn, player_index, message):
         changeTurn_msg = {
             "type": "change_turn"
         }
-        send(opponent,changeTurn_msg)
-        send(conn, changeTurn_msg)
-
-    elif message["type"] == "turn_timeout":
-        # Current player's turn expired, so switch turns for both clients.
-        print(f"SERVER: Player {player_index + 1} turn timed out")
-        changeTurn_msg = {
-            "type": "change_turn"
-        }
         send(opponent, changeTurn_msg)
         send(conn, changeTurn_msg)
 
+    elif message["type"] == "turn_timeout":
+        # This player's turn expired, so switch turns for both clients.
+        print(f"SERVER: Player {message["player_id"]} turn timed out")
+        
+        send(opponent, message)
+        send(conn, message)
+
     elif message["type"] == "time_ran_out":
-        # Whole match timer expired. Forward the result to both players.
-        global winner
-        GAME_OVER = True
-        winner = message["winner"]
+        # Player's turn timed out
 
         send(opponent, message)
         send(conn, message)
