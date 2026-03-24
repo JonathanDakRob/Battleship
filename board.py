@@ -820,7 +820,7 @@ def draw_animation(screen):
                 image_path = "images\\Battleship_Smoke3.png"
         
         if anim_type == 5:
-            # board argument represents the player_id who timed out
+            # Timed out animation: Board argument represents the player_id who timed out
             if anim["board"] in (1,2):
                 draw_time_ran_out(anim["board"] == backend.player_id)
                 time_out_start = anim["start"]
@@ -1210,7 +1210,7 @@ while running:
 
     # ------------------ SINGLE PLAYER AI AUTO-TURN ------------------
     if backend.GAME_STATE == "RUNNING_GAME" and backend.GAME_MODE == 1:
-        if not backend.your_turn:
+        if not backend.your_turn and not backend.wait_for_animation:
             # Start a random AI delay so the AI does not always move instantly
             if ai_turn_due_time is None:
                 ai_delay = backend.get_ai_move_delay()
