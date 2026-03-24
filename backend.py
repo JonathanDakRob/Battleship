@@ -212,6 +212,7 @@ def ai_take_multi_bomb_turn():
 
     anim_val = 0
     sunk_indexes = []
+    hit_any = False
 
     for row, col in cells:
         # Skip cells the AI already attacked before
@@ -223,6 +224,7 @@ def ai_take_multi_bomb_turn():
         ship_idx = get_ship_index(row, col)
 
         if hit:
+            hit_any = True
             grid[row][col] = "X"
             shots_received_hit.append((row, col))
 
@@ -250,7 +252,7 @@ def ai_take_multi_bomb_turn():
     ai_multi_bomb_used = True
     print(f"AI used MULTI-BOMB at center ({center_row}, {center_col})")
 
-    return center_row, center_col, all_sunk_result
+    return center_row, center_col, hit_any, all_sunk_result
 
 def player_shoot_ai(row, col):
     """

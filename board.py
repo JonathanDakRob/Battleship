@@ -1199,20 +1199,35 @@ while running:
                 ai_turn_due_time = time.monotonic() + ai_delay
 
             elif time.monotonic() >= ai_turn_due_time:
+                ai_hit = False
+                all_sunk = False
+
                 # Give the AI a random chance to use this one-time multi-bomb
                 if backend.ai_should_use_multi_bomb():
-                    center_row, center_col, all_sunk = backend.ai_take_multi_bomb_turn()
+                    center_row, center_col, ai_hit, all_sunk = backend.ai_take_multi_bomb_turn()
                     print(f"AI multi-bombed around ({center_row}, {center_col})")
+
+                    # For multi-bomb, treat it as a successful hit turn if at least one
+                    # new hit was recorded during the attack.
+
                 else:
                     row, col, hit, sunk, all_sunk = backend.ai_take_turn()
+                    ai_hit = hit
 
                 if all_sunk:
                     backend.winner = False
                     backend.update_game_state("GAME_OVER")
                 else:
-                    backend.your_turn = True
-                    reset_turn_timer()
+                    # Easy and medium AI keep the turn after a hit.
+                    # Hard AI always gives the turn back to the player.
+                    if backend.ai_difficulty in ("easy", "medium") and ai_hit:
+                        backend.your_turn = False
+                    else:
+                        backend.your_turn = True
+                        reset_turn_timer()
 
+                # Clear the pending AI move time so the next AI move
+                # can be scheduled again if it keeps the turn.
                 ai_turn_due_time = None
         else:
             # If it is the player's turn again, clear any pending AI move
