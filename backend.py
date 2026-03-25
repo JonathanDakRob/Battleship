@@ -37,6 +37,7 @@ all_ships_locked = False
 opponent_ships_sunk = 0
 multi_bomb_used = False # True after the player uses their one multibomb for this game
 radar_used= False
+radar_flash_data = None
 
 # Game mode: Single or Multi-player
 # Single Player: 1
@@ -656,6 +657,20 @@ def send_bomb(row, col):
     _send(msg)
     print(f"BOMB SENT: {row},{col}")
 
+def send_radar_scan(row, col):
+    global radar_used
+    if radar_used:
+        print("RADAR FAILED: Already used.")
+        return
+    msg = {
+        "type": "radar_scan",
+        "center_row": row,
+        "center_col": col
+    }
+    _send(msg)
+    radar_used = True
+    print(f"RADAR SENT: center=({row},{col})")
+
 def send_multi_bomb(row, col):
     global your_turn, GAME_STATE, multi_bomb_used
 
@@ -763,6 +778,18 @@ def get_num_ships_sunk():
                 break
     
     return num_sunk
+
+def receive_radar_scan(center_row, center_col):
+    cells = compute_multi_bomb_cells(center_row, center_col)
+    found = any(grid[r][c] == "S" for r, c in cells)
+    msg = {
+        "type": "radar_result",
+        "center_row": center_row,
+        "center_col": center_col,
+        "found": found
+    }
+    _send(msg)
+    print(f"RADAR RECEIVED at ({center_row},{center_col}): found={found}")
 
 # Shot Handling (Local)
 def receive_shot(row, col):
@@ -991,7 +1018,7 @@ def reset_game():
     global shots_received_hit, shots_received_miss, shots_sent_hit, shots_sent_miss
     global ship_count, your_turn, GAME_STATE, GAME_MODE, multi_bomb_used
     global ships_locked, all_ships_locked
-    global radar_used
+    global radar_used, radar_flash_data
 
     grid = [["." for _ in range(BOARD_SIZE)] for _ in range(BOARD_SIZE)]
     target_grid = [["." for _ in range(BOARD_SIZE)] for _ in range(BOARD_SIZE)]
@@ -1011,6 +1038,7 @@ def reset_game():
     your_turn = False
     multi_bomb_used = False
     radar_used= False
+    radar_flash_data = None
 
     GAME_MODE = 0
     GAME_STATE = "MAIN_MENU"
@@ -1099,6 +1127,17 @@ def handle_server_message(message):
         p_id = message["player_id"]
         handle_turn_timeout(p_id)
 
+    elif mtype == "radar_scan":
+        receive_radar_scan(message["center_row"], message["center_col"])
+
+    elif mtype == "radar_result":
+        global radar_flash_data
+        radar_flash_data = {
+            "center_row": message["center_row"],
+            "center_col": message["center_col"],
+            "found": message["found"]
+        }
+        print(f"RADAR RESULT: found={message['found']}")
     else:
         print(f"Unknown Message: {message}")
 

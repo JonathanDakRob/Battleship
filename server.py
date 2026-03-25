@@ -96,6 +96,13 @@ def handle_message(conn, player_index, message):
         send(opponent, changeTurn_msg)
         send(conn, changeTurn_msg)
 
+    elif message["type"] == "radar_scan":
+        print(f"SERVER: Player {player_index + 1} used radar scan")
+        send(opponent, message)
+
+    elif message["type"] == "radar_result":
+        send(opponent, message)
+
     elif message["type"] == "turn_timeout":
         # This player's turn expired, so switch turns for both clients.
         print(f"SERVER: Player {message["player_id"]} turn timed out")

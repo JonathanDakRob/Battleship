@@ -1219,18 +1219,18 @@ while running:
 
                             # Can only send bomb if it is your turn
                             if backend.your_turn:
-                                if multi_bomb_mode:
-                                    # If multi-bomb mode is armed, send one 3x3 attack
-                                    # instead of a normal single-cell bomb.
+                                if radar_mode:
+                                    backend.send_radar_scan(click_row, click_col)
+                                    radar_mode = False
+                                    break
+                                elif multi_bomb_mode:
                                     print(f"FRONTEND: Sending MULTI-BOMB to {click_row, click_col}")
                                     backend.send_multi_bomb(click_row, click_col)
-
-                                    # Turn off the mode after one use so the player must
-                                    # intentionally arm it again next time.
                                     multi_bomb_mode = False
                                 else:
                                     print(f"FRONTEND: Sending Bomb to {click_row, click_col}")
                                     backend.send_bomb(click_row, click_col)
+                            
                             break
 
         # ------------------ TIME RAN OUT STATE ---------------
@@ -1369,6 +1369,19 @@ while running:
 
         if radar_mode:
             draw_radar_preview(mouse_pos)
+
+        if backend.radar_flash_data is not None:
+            cells = backend.compute_multi_bomb_cells(
+                backend.radar_flash_data["center_row"],
+                backend.radar_flash_data["center_col"]
+            )
+            radar_flash = {
+                "cells": cells,
+                "result": backend.radar_flash_data["found"],
+                "start": time.monotonic()
+            }
+            backend.radar_flash_data = None
+
         draw_radar_flash()
 
         draw_backend_ships()
