@@ -359,9 +359,9 @@ def draw_game_over(winner):
     subtitle = ""
 
     if winner:
-        subtitle = small_font.render("Victory!!!", True, (180, 180, 180))
+        subtitle = small_font.render("Victory!!!", True, (0, 139, 0))
     else:
-        subtitle = small_font.render("Defeat...", True, (180, 180, 180))
+        subtitle = small_font.render("Defeat...", True, (139, 0, 0))
 
     screen.blit(
         title,
