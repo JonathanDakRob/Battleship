@@ -13,11 +13,11 @@ import random
 os.environ['SDL_VIDEO_CENTERED'] = '1' 
 
 GRID_SIZE = 10
-CELL_SIZE = 30     # Shrinks the squares so the window isn't too tall
+CELL_SIZE = 22    # Shrinks the squares so the window isn't too tall
 LABEL_MARGIN = 20
 GRID_PADDING = 40
-WINDOW_WIDTH = (GRID_SIZE * CELL_SIZE) + (2 * GRID_PADDING) + 200
-WINDOW_HEIGHT = (GRID_SIZE * CELL_SIZE * 2) + 200
+WINDOW_WIDTH = (GRID_SIZE * CELL_SIZE) + (2 * GRID_PADDING) + 180
+WINDOW_HEIGHT = (GRID_SIZE * CELL_SIZE * 2) + 160
 
 BG_COLOR = (30, 30, 30)
 GRID_COLOR = (0, 0, 128)
@@ -215,6 +215,8 @@ def reset_local_ui_state():
     ships_selected = False
     started_running_game = False
     multi_bomb_mode = False
+    radar_mode = False
+    radar_flash = None
     game_mode = 0
     ships.clear()
 
@@ -225,13 +227,15 @@ def reset_local_ui_state():
     last_turn_state = None
     ai_turn_due_time = None
 
+
+
 '''
 PyGame Drawing Functions:
 The following functions use PyGame to draw the frontend/UI of the game.
 They are called during the main gameplay loop and draw things depending on the Game State.
 '''
 def draw_main_menu(mouse_pos):
-    font = pygame.font.Font("fonts\\PressStart2P-Regular.ttf", 45)
+    font = pygame.font.Font("fonts\\PressStart2P-Regular.ttf", 30)
     button_font = pygame.font.Font("fonts\\PressStart2P-Regular.ttf", 20)
 
     # single_rect = pygame.Rect(WINDOW_WIDTH//2 - 150, WINDOW_HEIGHT//2 - 80, 300, 60)
@@ -555,6 +559,32 @@ def draw_multi_bomb_preview(mouse_pos):
                 rect = pygame.Rect(x, y, CELL_SIZE, CELL_SIZE)
                 pygame.draw.rect(screen, (240, 220, 80), rect, 3)
 
+def draw_radar_preview(mouse_pos):
+    if not radar_mode:
+        return
+    for cell in top_grid:
+        if cell.rect.collidepoint(mouse_pos):
+            center_row, center_col = cell.get_coords()
+            cells = backend.compute_multi_bomb_cells(center_row, center_col)
+            for r, c in cells:
+                x = GRID_PADDING + c * CELL_SIZE
+                y = top_grid_y + r * CELL_SIZE
+                rect = pygame.Rect(x, y, CELL_SIZE, CELL_SIZE)
+                pygame.draw.rect(screen, (80, 200, 255), rect, 3)
+
+def draw_radar_flash():
+    if not radar_flash:
+        return
+    elapsed = time.monotonic() - radar_flash["start"]
+    if elapsed > 1.5:
+        return
+    color = (0, 255, 100) if radar_flash["result"] else (255, 80, 80)
+    for r, c in radar_flash["cells"]:
+        x = GRID_PADDING + c * CELL_SIZE
+        y = top_grid_y + r * CELL_SIZE
+        rect = pygame.Rect(x, y, CELL_SIZE, CELL_SIZE)
+        pygame.draw.rect(screen, color, rect, 3)
+
 def draw_status_panel():
     # Simple UI panel to explain state during demo
     panel_x = GRID_PADDING + GRID_SIZE * CELL_SIZE + 15
@@ -580,6 +610,7 @@ def draw_status_panel():
         "",
         f"Multi-bomb (M): {multi_bomb_status}",
         "",
+        f"Radar (R): {'USED' if backend.radar_used else 'ARMED' if radar_mode else 'READY'}",
         f"Ships sunk: {backend.get_num_ships_sunk()}/{len(backend.ships)}",
         f"Enemy ships sunk: {backend.opponent_ships_sunk}/{len(backend.ships)}",
         f"Shots hit: {len(backend.shots_sent_hit)}",
@@ -589,7 +620,7 @@ def draw_status_panel():
     ]
 
     # Timer at the bottom of the screen
-    timer_font = pygame.font.Font("fonts\\PressStart2P-Regular.ttf", 24)
+    timer_font = pygame.font.Font("fonts\\PressStart2P-Regular.ttf", 16)
     timer_surf = timer_font.render(format_seconds(current_turn_time_left), True, (255,255,255))
     screen.blit(timer_surf, BUTTON_RECT.inflate(12,12))
 
@@ -911,6 +942,8 @@ running = True
 ships_selected = False # Used to move on from ship selection stage
 started_running_game = False # True if the game has fully started
 multi_bomb_mode = False
+radar_mode = False
+radar_flash = None
 game_mode = 0
 ai_turn_due_time = None
 
@@ -1071,13 +1104,33 @@ while running:
                                 multi_bomb_mode = not multi_bomb_mode
                                 print(f"MULTI-BOMB MODE: {multi_bomb_mode}")
 
+                        elif event.key == pygame.K_r:
+                            if backend.radar_used:
+                                print("RADAR already used.")
+                                radar_mode = False
+                            else:
+                                radar_mode = not radar_mode
+                                print(f"RADAR MODE: {radar_mode}")
+
                     if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                         if backend.your_turn and not backend.wait_for_animation:
                             for cell in top_grid:
                                 if cell.rect.collidepoint(mouse_pos):
                                     r, c = cell.get_coords()
 
-                                    if multi_bomb_mode:
+                                    if radar_mode:
+                                        used, found = backend.player_radar_scan(r, c)
+                                        if used:
+                                            radar_mode = False
+                                            cells = backend.compute_multi_bomb_cells(r, c)
+                                            radar_flash = {
+                                                "cells": cells,
+                                                "result": found,
+                                                "start": time.monotonic()
+                                            }
+                                        break
+                                    
+                                    elif multi_bomb_mode:
                                         print(f"FRONTEND: Sending SINGLE-PLAYER MULTI-BOMB to {(r, c)}")
                                         used_successfully, all_sunk = backend.player_multi_bomb_ai(r, c)
 
@@ -1145,6 +1198,14 @@ while running:
                             # Press M to toggle multi-bomb mode on or off.
                             multi_bomb_mode = not multi_bomb_mode
                             print(f"MULTI-BOMB MODE: {multi_bomb_mode}")
+
+                    elif event.key == pygame.K_r:
+                        if backend.radar_used:
+                            print("RADAR already used.")
+                            radar_mode = False
+                        else:
+                            radar_mode = not radar_mode
+                            print(f"RADAR MODE: {radar_mode}")
 
                 if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                     # Gate input so only the active player can fire
@@ -1305,6 +1366,10 @@ while running:
         
         if multi_bomb_mode:
             draw_multi_bomb_preview(mouse_pos)
+
+        if radar_mode:
+            draw_radar_preview(mouse_pos)
+        draw_radar_flash()
 
         draw_backend_ships()
         draw_status_panel()

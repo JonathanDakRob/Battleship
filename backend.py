@@ -36,6 +36,7 @@ ships_locked = False
 all_ships_locked = False
 opponent_ships_sunk = 0
 multi_bomb_used = False # True after the player uses their one multibomb for this game
+radar_used= False
 
 # Game mode: Single or Multi-player
 # Single Player: 1
@@ -373,6 +374,22 @@ def player_multi_bomb_ai(center_row, center_col): ##
     multi_bomb_used = True
     print(f"MULTI-BOMB used in single player at center ({center_row}, {center_col})")
     return True, all_sunk_result
+
+def player_radar_scan(center_row, center_col):
+    """
+    Reveals whether any AI ship exists in a 3x3 area.
+    Returns (already_used, found) — does not shoot anything.
+    """
+    global radar_used
+    if radar_used:
+        print("RADAR FAILED: Already used.")
+        return False, False
+
+    cells = compute_multi_bomb_cells(center_row, center_col)
+    found = any(ai_grid[r][c] == "S" for r, c in cells)
+    radar_used = True
+    print(f"RADAR SCAN at ({center_row},{center_col}): {'Ship found!' if found else 'Nothing found.'}")
+    return True, found
 
 def ai_should_use_multi_bomb():
     # AI can only use multi-bomb once per game.
@@ -974,6 +991,7 @@ def reset_game():
     global shots_received_hit, shots_received_miss, shots_sent_hit, shots_sent_miss
     global ship_count, your_turn, GAME_STATE, GAME_MODE, multi_bomb_used
     global ships_locked, all_ships_locked
+    global radar_used
 
     grid = [["." for _ in range(BOARD_SIZE)] for _ in range(BOARD_SIZE)]
     target_grid = [["." for _ in range(BOARD_SIZE)] for _ in range(BOARD_SIZE)]
@@ -992,6 +1010,7 @@ def reset_game():
     ship_count = 0
     your_turn = False
     multi_bomb_used = False
+    radar_used= False
 
     GAME_MODE = 0
     GAME_STATE = "MAIN_MENU"
