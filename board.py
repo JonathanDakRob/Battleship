@@ -20,9 +20,10 @@ WINDOW_WIDTH = (GRID_SIZE * CELL_SIZE) + (2 * GRID_PADDING) + 200
 WINDOW_HEIGHT = (GRID_SIZE * CELL_SIZE * 2) + 200
 
 BG_COLOR = (30, 30, 30)
-GRID_COLOR = (200, 200, 200)
+GRID_COLOR = (0, 0, 128)
 HOVER_COLOR = (100, 180, 255)
-
+WATER_COLOR =  (35,137,218)
+WATER_HOVER_COLOR = (15,94,156)
 
 SHIP_COLOR = (180, 180, 180)
 SHIP_PADDING = 20
@@ -76,8 +77,11 @@ class Cell:
         self.col = col
 
     def draw(self, surface, mouse_pos):
-        color = HOVER_COLOR if self.rect.collidepoint(mouse_pos) else GRID_COLOR
-        pygame.draw.rect(surface, color, self.rect, 2)
+        fill_color = WATER_HOVER_COLOR if self.rect.collidepoint(mouse_pos) else WATER_COLOR
+        # Fill the cell
+        pygame.draw.rect(surface, fill_color, self.rect)
+        # Draw the border on top
+        pygame.draw.rect(surface, GRID_COLOR, self.rect, 2)
 
     def handle_click(self):
         letters = "ABCDEFGHIJ"
@@ -403,6 +407,7 @@ def draw_ship_placement():
                 CELL_SIZE,
                 CELL_SIZE
             )
+            pygame.draw.rect(screen, WATER_COLOR, rect)      # fill blue
             pygame.draw.rect(screen, GRID_COLOR, rect, 2)
    
     active_ship = None
@@ -431,6 +436,7 @@ def create_grid(grid_id, start_x, start_y):
             cells.append(Cell(rect, grid_id, row, col))
     return cells
 
+####
 top_grid_y = GRID_PADDING + 10
 bottom_grid_y = top_grid_y + (GRID_SIZE * CELL_SIZE) + 30
 
