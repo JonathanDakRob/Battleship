@@ -9,6 +9,11 @@ import math
 import time
 import random
 
+# Resource path finding for .exe file
+def resource_path(relative_path):
+    base_path = getattr(sys, "_MEIPASS", os.path.abspath("."))
+    return os.path.join(base_path, relative_path)
+
 # ------------------ CONFIG ------------------
 os.environ['SDL_VIDEO_CENTERED'] = '1' 
 
@@ -235,8 +240,8 @@ The following functions use PyGame to draw the frontend/UI of the game.
 They are called during the main gameplay loop and draw things depending on the Game State.
 '''
 def draw_main_menu(mouse_pos):
-    font = pygame.font.Font("fonts\\PressStart2P-Regular.ttf", 30)
-    button_font = pygame.font.Font("fonts\\PressStart2P-Regular.ttf", 20)
+    font = pygame.font.Font(resource_path("fonts/PressStart2P-Regular.ttf"), 30)
+    button_font = pygame.font.Font(resource_path("fonts/PressStart2P-Regular.ttf"), 20)
 
     # single_rect = pygame.Rect(WINDOW_WIDTH//2 - 150, WINDOW_HEIGHT//2 - 80, 300, 60)
     # multi_rect = pygame.Rect(WINDOW_WIDTH//2 - 150, WINDOW_HEIGHT//2 + 20, 300, 60)
@@ -273,8 +278,8 @@ def draw_main_menu(mouse_pos):
 
 def draw_difficulty_selection(mouse_pos):
     screen.fill(BG_COLOR)
-    font = pygame.font.Font("fonts\\PressStart2P-Regular.ttf", 30)
-    btn_font = pygame.font.Font("fonts\\PressStart2P-Regular.ttf", 20)
+    font = pygame.font.Font(resource_path("fonts/PressStart2P-Regular.ttf"), 30)
+    btn_font = pygame.font.Font(resource_path("fonts/PressStart2P-Regular.ttf"), 20)
     title = font.render("Select Difficulty", True, (255, 255, 255))
     screen.blit(title, (WINDOW_WIDTH//2 - title.get_width()//2, WINDOW_HEIGHT//4))
 
@@ -291,7 +296,7 @@ def draw_difficulty_selection(mouse_pos):
 
 def draw_message(message):
     screen.fill(BG_COLOR)
-    font = pygame.font.Font("fonts\\PressStart2P-Regular.ttf", 30)
+    font = pygame.font.Font(resource_path("fonts/PressStart2P-Regular.ttf"), 30)
     title = font.render(message,True,(255,255,255))
 
     screen.blit(
@@ -317,8 +322,8 @@ def draw_button(mouse_pos, text="BACK", color=(180, 50, 50), border_rad=0):
 def draw_waiting_for_player(message, number=0):
     screen.fill(BG_COLOR)
 
-    font = pygame.font.Font("fonts\\PressStart2P-Regular.ttf", 20)
-    small_font = pygame.font.Font("fonts\\PressStart2P-Regular.ttf", 12)
+    font = pygame.font.Font(resource_path("fonts/PressStart2P-Regular.ttf"), 20)
+    small_font = pygame.font.Font(resource_path("fonts/PressStart2P-Regular.ttf"), 12)
     
     if number == 0:
         title = font.render(f"Waiting for Other Player...", True, (255, 255, 255))
@@ -341,8 +346,8 @@ def draw_waiting_for_player(message, number=0):
 def draw_ship_selection():
     screen.fill(BG_COLOR)
 
-    font = pygame.font.Font("fonts\\PressStart2P-Regular.ttf", 15)
-    small_font = pygame.font.Font("fonts\\PressStart2P-Regular.ttf", 10)
+    font = pygame.font.Font(resource_path("fonts/PressStart2P-Regular.ttf"), 15)
+    small_font = pygame.font.Font(resource_path("fonts/PressStart2P-Regular.ttf"), 10)
 
     title_text = font.render("Select Number of Ships (1 - 5)", True, (255, 255, 255))
     instruction_text = small_font.render("Press a number key 1, 2, 3, 4, or 5", True, (200, 200, 200))
@@ -356,8 +361,8 @@ def draw_ship_selection():
 def draw_game_over(winner):
     screen.fill(BG_COLOR)
 
-    font = pygame.font.Font("fonts\\PressStart2P-Regular.ttf", 30)
-    small_font = pygame.font.Font("fonts\\PressStart2P-Regular.ttf", 20)
+    font = pygame.font.Font(resource_path("fonts/PressStart2P-Regular.ttf"), 30)
+    small_font = pygame.font.Font(resource_path("fonts/PressStart2P-Regular.ttf"), 20)
 
     title = title = font.render(f"GAME OVER", True, (255, 255, 255))
     subtitle = ""
@@ -620,7 +625,7 @@ def draw_status_panel():
     ]
 
     # Timer at the bottom of the screen
-    timer_font = pygame.font.Font("fonts\\PressStart2P-Regular.ttf", 16)
+    timer_font = pygame.font.Font(resource_path("fonts/PressStart2P-Regular.ttf"), 16)
     timer_surf = timer_font.render(format_seconds(current_turn_time_left), True, (255,255,255))
     screen.blit(timer_surf, BUTTON_RECT.inflate(12,12))
 
@@ -666,9 +671,9 @@ def draw_time_ran_out(lost_turn):
     # Player ran out of time, other player's turn
     global time_out_start
     duration = 1.8 # display message for this many seconds
-    font = pygame.font.Font("fonts\\PressStart2P-Regular.ttf", 38)
+    font = pygame.font.Font(resource_path("fonts/PressStart2P-Regular.ttf"), 38)
     font.set_bold(True)
-    small_font = pygame.font.Font("fonts\\PressStart2P-Regular.ttf", 22)
+    small_font = pygame.font.Font(resource_path("fonts/PressStart2P-Regular.ttf"), 22)
 
     title = font.render("TIME RAN OUT", True, (139, 0, 0))
     subtitle = None
@@ -832,29 +837,29 @@ def draw_animation(screen):
             # Play Falling Bomb animation
             backend.set_wait_for_animation(True) # Wait for animation to finish before next shot/turn
             if elapsed < (duration / 5):
-                image_path = "images\\Battleship_Bomb1.png"
+                image_path = resource_path("images\\Battleship_Bomb1.png")
             elif elapsed < (2* duration / 5):
-                image_path = "images\\Battleship_Bomb2.png"
+                image_path = resource_path("images\\Battleship_Bomb2.png")
             elif elapsed < (3* duration / 5):
-                image_path = "images\\Battleship_Bomb3.png"
+                image_path = resource_path("images\\Battleship_Bomb3.png")
             elif elapsed < (4* duration / 5):
-                image_path = "images\\Battleship_Bomb4.png"
+                image_path = resource_path("images\\Battleship_Bomb4.png")
             else:
                 if anim_type == 1:
                     # Play Splash animation
-                    image_path = "images\\Battleship_Splash.png"
+                    image_path = resource_path("images\\Battleship_Splash.png")
                 else:
                     # Play Bang animation
-                    image_path = "images\\Battleship_Bang.png"
+                    image_path = resource_path("images\\Battleship_Bang.png")
 
         if anim_type == 4:
             # Play RISING SMOKE aniation
             if elapsed < (duration/3):
-                image_path = "images\\Battleship_Smoke1.png"
+                image_path = resource_path("images\\Battleship_Smoke1.png")
             elif elapsed < (2* duration/3):
-                image_path = "images\\Battleship_Smoke2.png"
+                image_path = resource_path("images\\Battleship_Smoke2.png")
             else:
-                image_path = "images\\Battleship_Smoke3.png"
+                image_path = resource_path("images\\Battleship_Smoke3.png")
         
         if anim_type == 5:
             # Timed out animation: Board argument represents the player_id who timed out

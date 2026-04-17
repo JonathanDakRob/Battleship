@@ -80,10 +80,8 @@ def remove_animation():
 def set_wait_for_animation(wait):
     global wait_for_animation
     if wait in (True,False):
-        print(f"Wait 1: {wait}")
         if wait_for_animation != wait:
             wait_for_animation = wait
-            print(f"Wait 2: {wait}")
     else:
         print("BACKEND: Invalid Wait Value")
     
@@ -260,7 +258,6 @@ def ai_take_multi_bomb_turn():
     add_animation(anim_val, (center_row,center_col), 2, multi_bomb=True)
 
     ai_multi_bomb_used = True
-    print(f"AI used MULTI-BOMB at center ({center_row}, {center_col})")
 
     return center_row, center_col, hit_any, all_sunk_result
 
@@ -318,13 +315,12 @@ def player_multi_bomb_ai(center_row, center_col): ##
     global opponent_ships_sunk, multi_bomb_used
 
     if multi_bomb_used:
-        print("MULTI-BOMB FAILED: Already used this game.")
         return False, False
 
     cells = compute_multi_bomb_cells(center_row, center_col)
 
     if not can_send_multi_bomb(cells):
-        print("MULTI-BOMB FAILED: Entire 3x3 area was already targeted.")
+        # print("MULTI-BOMB FAILED: Entire 3x3 area was already targeted.")
         return False, False
 
     sunk_ship_indexes = []
@@ -373,7 +369,7 @@ def player_multi_bomb_ai(center_row, center_col): ##
     
     add_animation(anim_val, (center_row,center_col), 1, multi_bomb=True)
     multi_bomb_used = True
-    print(f"MULTI-BOMB used in single player at center ({center_row}, {center_col})")
+    # print(f"MULTI-BOMB used in single player at center ({center_row}, {center_col})")
     return True, all_sunk_result
 
 def player_radar_scan(center_row, center_col):
@@ -383,13 +379,13 @@ def player_radar_scan(center_row, center_col):
     """
     global radar_used
     if radar_used:
-        print("RADAR FAILED: Already used.")
+        # print("RADAR FAILED: Already used.")
         return False, False
 
     cells = compute_multi_bomb_cells(center_row, center_col)
     found = any(ai_grid[r][c] == "S" for r, c in cells)
     radar_used = True
-    print(f"RADAR SCAN at ({center_row},{center_col}): {'Ship found!' if found else 'Nothing found.'}")
+    # f"RADAR SCAN at ({center_row},{center_col}): {'Ship found!' if found else 'Nothing found.'}")
     return True, found
 
 def ai_should_use_multi_bomb():
@@ -553,7 +549,7 @@ def remove_ship_from_grid(cells):
 def update_ship_count(count):
     # Player 1 selects ship count; server forwards to both clients.
     if not (1 <= count <= 5):
-        print("ship count must be 1-5")
+        print("BACKEND: Ship count must be 1-5")
         return False
     
     message = {
@@ -573,7 +569,7 @@ def place_ship(row, col, size, orientation):
     orientation = (orientation or "").strip().upper()
 
     if size > 1 and orientation not in ("H", "V"):
-        print("Invalid orientation. Use 'H' or 'V'.")
+        print("BACKEND: Invalid orientation. Use 'H' or 'V'.")
         return False
 
     if size <= 1:
@@ -582,18 +578,18 @@ def place_ship(row, col, size, orientation):
     cells = compute_ship_cells(row, col, size, orientation)
 
     if not is_straight_and_contiguous(cells, size):
-        print("Invalid ship placement (must be straight and contiguous).")
+        print("BACKEND: Invalid ship placement (must be straight and contiguous).")
         return False
 
     if not can_place_ship(cells):
-        print("Invalid ship placement.")
+        print("BACKEND: Invalid ship placement.")
         return False
 
     for r, c in cells:
         grid[r][c] = "S" # Marks ship presence on the board
 
     ships.append(cells) # Saves ship cells for later hit/sunk logic
-    print(f"Ship of size {size} placed at {cells}")
+    # print(f"Ship of size {size} placed at {cells}")
     return True
 
 def submit_placement():
@@ -608,7 +604,7 @@ def submit_placement():
     }
     
     ships_locked = True
-    print("Submitting ship placement to server")
+    # print("Submitting ship placement to server")
     _send(msg)
 
 ############################################################################# In-game Functions #############################################################################
@@ -636,16 +632,16 @@ def send_bomb(row, col):
 
     # This is the main gate: only shoot during RUNNING_GAME.
     if GAME_STATE != "RUNNING_GAME":
-        print("BOMB FAILED: Not in RUNNING_GAME.")
+        print("BACKEND: BOMB FAILED: Not in RUNNING_GAME.")
         return
 
     # Turn-based gating prevents both players shooting at once.
     if not your_turn:
-        print("BOMB FAILED: Not your turn.")
+        print("BACKEND: BOMB FAILED: Not your turn.")
         return
 
     if not can_send_bomb(row, col):
-        print("BOMB FAILED: Invalid bomb (repeat or out of bounds).")
+        print("BACKEND: BOMB FAILED: Invalid bomb (repeat or out of bounds).")
         return
 
     msg = {
@@ -655,12 +651,12 @@ def send_bomb(row, col):
     }
 
     _send(msg)
-    print(f"BOMB SENT: {row},{col}")
+    # print(f"BOMB SENT: {row},{col}")
 
 def send_radar_scan(row, col):
     global radar_used
     if radar_used:
-        print("RADAR FAILED: Already used.")
+        # print("BACKEND: RADAR FAILED: Already used.")
         return
     msg = {
         "type": "radar_scan",
@@ -669,24 +665,24 @@ def send_radar_scan(row, col):
     }
     _send(msg)
     radar_used = True
-    print(f"RADAR SENT: center=({row},{col})")
+    # f"RADAR SENT: center=({row},{col})")
 
 def send_multi_bomb(row, col):
     global your_turn, GAME_STATE, multi_bomb_used
 
     # Only allow multi-bomb during the real gameplay phase.
     if GAME_STATE != "RUNNING_GAME":
-        print("MULTI-BOMB FAILED: Not in RUNNING_GAME.")
+        print("BACKEND: MULTI-BOMB FAILED: Not in RUNNING_GAME.")
         return
 
     # Only the current player can fire.
     if not your_turn:
-        print("MULTI-BOMB FAILED: Not your turn.")
+        print("BACKEND: MULTI-BOMB FAILED: Not your turn.")
         return
 
     # Each player can only use multibomb once per game.
     if multi_bomb_used:
-        print("MULTI-BOMB FAILED: Already used this game.")
+        print("BACKEND: MULTI-BOMB FAILED: Already used this game.")
         return
 
     # Convert one clicked square into a valid 3x3 attack area.
@@ -694,7 +690,7 @@ def send_multi_bomb(row, col):
 
     # Block the attack if the whole area was already used before.
     if not can_send_multi_bomb(cells):
-        print("MULTI-BOMB FAILED: Entire 3x3 area was already targeted.")
+        # print("BACKEND: MULTI-BOMB FAILED: Entire 3x3 area was already targeted.")
         return
 
     # Send both the center point and the full list of target cells.
@@ -708,12 +704,10 @@ def send_multi_bomb(row, col):
 
     _send(msg)
     multi_bomb_used = True
-    print(f"MULTI-BOMB SENT: center=({row}, {col}) cells={cells}")
 
 def get_ship_index(row, col):
     # Returns the ship index containing (row, col), or -1 if no ship occupies it.
     target = (row, col)
-    print(f"BACKEND: get_ship_index - {target}")
     for i in range(0,len(ships)):
         print(f"BACKEND: Checking index {i}, ship {ships[i]} for {target}")
         if target in ships[i]:
@@ -731,7 +725,6 @@ def get_ship_coords(ship_index):
 
 def check_ship_sunk(ship_index):
     # True if every cell in this ship has been hit ("X").
-    print(f"BACKEND: Checking ship {ship_index} index")
     if ship_index < 0 or ship_index >= len(ships):
         return False
     ship = ships[ship_index]
@@ -755,7 +748,6 @@ def sink_opp_ship(ship_coords):
 
     for r, c in ship_coords:
         target_grid[r][c] = "D"
-        print(f"Grid ({r},{c}) = {target_grid[r][c]}")
 
     opponent_ships_sunk += 1
 
@@ -765,7 +757,6 @@ def sink_own_ship(ship_index):
 
     for r, c in ship:
         grid[r][c] = "D"
-        print(f"Grid ({r},{c}) = {grid[r][c]}")
 
 def get_num_ships_sunk():
     global ships
@@ -789,7 +780,6 @@ def receive_radar_scan(center_row, center_col):
         "found": found
     }
     _send(msg)
-    print(f"RADAR RECEIVED at ({center_row},{center_col}): found={found}")
 
 # Shot Handling (Local)
 def receive_shot(row, col):
@@ -801,9 +791,7 @@ def receive_shot(row, col):
         return
 
     hit = (grid[row][col] == "S")
-    print(f"Hit: {hit}")
     ship_index = get_ship_index(row, col)
-    print(f"Ship Index: {ship_index}")
     sunk = False
     all_sunk = False
     ship_coords = None
@@ -811,9 +799,8 @@ def receive_shot(row, col):
     if hit:
         grid[row][col] = "X" # Mark damage on our ship
         shots_received_hit.append((row,col))
-        print("Your ship was hit!")
+        
         sunk = check_ship_sunk(ship_index) # True if this hit finished the ship
-        print(f"Sunk: {sunk}")
         
         if sunk:
             add_animation(3, (row,col), 2) # Add sunk animation
@@ -823,6 +810,7 @@ def receive_shot(row, col):
             all_sunk = all_ships_sunk() # True if we have no ships left
             print("Your ship was sunk!")
         else:
+            print("Your ship was hit!")
             add_animation(2, (row,col), 2) # Add hit animation
             
     else:
@@ -830,8 +818,6 @@ def receive_shot(row, col):
         grid[row][col] = "O" # Mark opponent miss on the board
         shots_received_miss.append((row,col))
         print("Opponent missed.")
-    
-    print(f"BACKEND: Receiving shot ({row},{col}) - Hit: {hit}, Index: {ship_index}, Sunk: {sunk}, All Sunk: {all_sunk}")
 
     msg = {
         "type": "hit_status",
@@ -943,6 +929,7 @@ def handle_hit_status(status, row, col, sunk, ship_coords, all_sunk):
         add_animation(1, (row,col), 1) # Miss animation
         shots_sent_miss.append(coord)
         target_grid[row][col] = "O"
+        print("You missed...")
     
     if all_sunk:
         global player_id
