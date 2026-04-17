@@ -1,130 +1,57 @@
-# Networked Battleship (Local Multiplayer Prototype)
+# 🚢 Battleship: Local Multiplayer Edition
 
-## Overview
-
-This project is a **networked Battleship game** built in Python using:
-
-- `socket` for TCP networking  
-- `threading` for concurrency  
-- `json` for message serialization  
-
-The system is structured to resemble a real online multiplayer architecture, with:
-
-- A **Server** that coordinates communication  
-- Two **Clients** (each running a frontend + backend)  
-- A clear separation between:
-  - UI logic  
-  - Game logic  
-  - Networking logic  
-
-The goal of this project was to model how a real client-server multiplayer game might be structured, rather than to create a production-ready deployment.
+A modern take on the classic Battleship game, designed for both **single-player and local multiplayer** gameplay on the same machine. Strategically place your ships, outsmart your opponent (human or AI), and make use of powerful abilities to turn the tide of battle.
 
 ---
 
-## License and Usage
+## 🎮 Features
 
-This project is **completely free to use**.  
-Anyone is welcome to take code, ideas, or concepts from this project at no cost.
-
-**Please provide credit** if you use this work in your own projects, tutorials, or demonstrations.  
-No formal license is required, but acknowledgment is appreciated as a courtesy.
-
----
-
-## Architecture
-
-The project consists of three main components:
-
-### 1. Server (`server.py`)
-- Accepts two client connections
-- Assigns player IDs
-- Relays messages between players
-- Synchronizes turn changes and game start/end
-- Does **not** enforce gameplay rules
-
-### 2. Backend (`backend.py`)
-- Contains all game logic
-- Maintains board state
-- Validates ship placement
-- Handles bomb resolution (hit/miss/sunk)
-- Tracks win conditions
-- Communicates with the server via JSON messages
-- Automatically starts the server if one is not already running
-
-### 3. Frontend (`board.py`)
-- Handles user interaction
-- Displays game boards
-- Sends player actions to the backend
-- Initiates the networking connection
+- 🧠 **Single-player mode** against an AI opponent  
+- 👥 **Local multiplayer** (same machine hot-seat style)  
+- ⚡ **Power-ups system** to add strategic depth to gameplay  
+- 🎬 **Custom animations** for attacks, hits, and special effects  
+- 🎯 Classic Battleship rules with enhanced mechanics  
 
 ---
 
-## How It Works
+## 🌐 Online Play
 
-1. Running `board.py` the first time:
-   - Starts the server automatically (if it is not already running)
-   - Connects the first client
-2. Running `board.py` a second time:
-   - Connects the second client to the same server
-3. Once both clients are connected:
-   - Players select ship counts and place ships
-   - When both lock ships, the match begins
-4. Players take turns sending bomb coordinates.
-5. The backend determines hit/miss/sunk conditions.
-6. When all ships of one player are destroyed, the game ends.
-
-The server acts purely as a **relay and synchronizer**.  
-All rule enforcement happens on each client’s backend.
+❌ Online multiplayer is **not supported yet**  
+This game is currently designed for local play only.
 
 ---
 
-## Important Note About Local Execution
+## 🐛 Known Bugs
 
-This project is currently designed to run **locally on a single machine**.
+1. **Single-player crash issue**  
+   Occasional crashes may occur when the AI attempts to use the *"multi-bomb"* power-up on its first turn.
 
-- Both clients connect to `127.0.0.1`
-- The server is automatically started by the first client instance
-- All processes run on the same machine
+2. **Multiplayer connection instability**  
+   Multiplayer mode may sometimes fail to connect.  
+   **Workaround:** Restart both game clients.
 
-Yes — this technically conflicts with the secret-information nature of Battleship.
-
-Because both clients and the server run locally:
-- Game state exists in memory on the same system
-- A determined user could inspect memory or logs to see opponent ship data
-- A player could just screen-look
-
-This project is **not intended to be launched or deployed publicly**.
-
-It is a **learning and architectural exercise**, demonstrating:
-
-- Client-server structure
-- Multiplayer synchronization
-- JSON-based message protocols
-- Threaded networking in Python
-- Clean separation of concerns
+3. **Incorrect timeout message display**  
+   The timeout screen may show the wrong message.  
+   This is **purely visual** and does not affect gameplay.
 
 ---
 
-## Running the Project
+## 🛠️ Future Improvements
 
-To play locally:
-
-1. Run `board.py`
-2. Run `board.py` again in a second terminal window
-3. Play
-
-No manual server startup is required.
+- Online multiplayer support
+- Bug fixes for AI power-up logic
+- Improved matchmaking and connection stability
+- Additional power-ups and animations
 
 ---
 
-## Educational Purpose
+## 📦 Running the Game
 
-This project demonstrates:
+- Go on over to the releases tab and download the most recent released version
+- Run it and enjoy the game (Windows Only)
 
-- TCP socket programming
-- Concurrent client handling
-- Game state synchronization
-- Turn-based protocol design
-- Clean modular architecture
+---
 
-It is best viewed as a **networked game architecture prototype**, not a production-ready Battleship implementation.
+## 📜 License
+
+MIT License
